@@ -354,7 +354,13 @@ class _AppLayoutState extends State<AppLayout> {
   Widget build(BuildContext context) {
     final state = Provider.of<AppState>(context);
     
-    return Scaffold(
+    return PopScope(
+      canPop: state.currentTab == 0,
+      onPopInvoked: (didPop) {
+        if (didPop) return;
+        state.setTab(0);
+      },
+      child: Scaffold(
       backgroundColor: AdyapanTheme.bgDark,
       // 1. Sleek Navigation Drawer (Secondary controls)
       drawer: Drawer(
@@ -497,30 +503,12 @@ class _AppLayoutState extends State<AppLayout> {
                                 ],
                               ),
                             ),
-<<<<<<< Updated upstream
                             const SizedBox(width: 8),
                             const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white70, size: 14),
                           ],
                         ),
                       ],
                     ),
-=======
-                          ),
-                          const Spacer(),
-                          const SizedBox.shrink(),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'Aarav Sharma',
-                        style: GoogleFonts.fredoka(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
-                      ),
-                      Text(
-                        'aarav.sharma@school.com',
-                        style: GoogleFonts.outfit(fontSize: 12, color: Colors.white70, fontWeight: FontWeight.w500),
-                      ),
-                    ],
->>>>>>> Stashed changes
                   ),
                 ),
                 
@@ -712,6 +700,7 @@ class _AppLayoutState extends State<AppLayout> {
           ],
         ),
       ),
+    ),
     );
   }
 

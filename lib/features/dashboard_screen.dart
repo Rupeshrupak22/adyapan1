@@ -430,20 +430,7 @@ class DashboardScreen extends StatelessWidget {
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     Text(
-<<<<<<< Updated upstream
-                                      () {
-                                        final hour = DateTime.now().hour;
-                                        if (hour >= 5 && hour < 12) {
-                                          return 'Good morning,';
-                                        } else if (hour >= 12 && hour < 17) {
-                                          return 'Good afternoon,';
-                                        } else {
-                                          return 'Good evening,';
-                                        }
-                                      }(),
-=======
                                       _getDynamicGreeting(),
->>>>>>> Stashed changes
                                       style: GoogleFonts.outfit(
                                         fontSize: 11, 
                                         color: const Color(0xFF1E3A8A).withOpacity(0.7),
@@ -809,11 +796,7 @@ class DashboardScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 26),
 
-<<<<<<< Updated upstream
                 // 6. DOUBT CLEARING SESSIONS SECTION
-=======
-                // 7. DOUBT CLEARING SESSIONS SECTION
->>>>>>> Stashed changes
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20.0),
                   child: Row(
