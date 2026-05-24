@@ -14,6 +14,19 @@ import 'doubt_solver_screen.dart';
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({Key? key}) : super(key: key);
 
+  String _getDynamicGreeting() {
+    final hour = DateTime.now().hour;
+    if (hour >= 5 && hour < 12) {
+      return 'Good morning ☀️,';
+    } else if (hour >= 12 && hour < 17) {
+      return 'Good afternoon 🌤️,';
+    } else if (hour >= 17 && hour < 22) {
+      return 'Good evening 🌙,';
+    } else {
+      return 'Happy late night study 🦉,';
+    }
+  }
+
   // QUICK ACCESS CARD INTERACTION ROUTER
   void _handleQuickAccessTap(BuildContext context, String cardTitle, AppState state) {
     if (cardTitle == 'Gemified') {
@@ -417,6 +430,7 @@ class DashboardScreen extends StatelessWidget {
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     Text(
+<<<<<<< Updated upstream
                                       () {
                                         final hour = DateTime.now().hour;
                                         if (hour >= 5 && hour < 12) {
@@ -427,6 +441,9 @@ class DashboardScreen extends StatelessWidget {
                                           return 'Good evening,';
                                         }
                                       }(),
+=======
+                                      _getDynamicGreeting(),
+>>>>>>> Stashed changes
                                       style: GoogleFonts.outfit(
                                         fontSize: 11, 
                                         color: const Color(0xFF1E3A8A).withOpacity(0.7),
@@ -792,7 +809,11 @@ class DashboardScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 26),
 
+<<<<<<< Updated upstream
                 // 6. DOUBT CLEARING SESSIONS SECTION
+=======
+                // 7. DOUBT CLEARING SESSIONS SECTION
+>>>>>>> Stashed changes
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20.0),
                   child: Row(

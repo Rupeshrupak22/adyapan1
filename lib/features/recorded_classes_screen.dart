@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../core/theme.dart';
@@ -10,14 +11,38 @@ class RecordedClassesScreen extends StatefulWidget {
 }
 
 class _RecordedClassesScreenState extends State<RecordedClassesScreen> {
+  Timer? _videoPlayTimer;
+
   void _simulatePlayVideo(String videoTitle) {
+    double progress = 0.15;
+    double maxWatchedProgress = 0.15;
+    bool isPlaying = true;
+
     showDialog(
       context: context,
+      barrierDismissible: false, // Prevent dismissing without closing properly
       builder: (context) {
-        bool isPlaying = true;
-        double progress = 0.15;
         return StatefulBuilder(
           builder: (context, setVideoState) {
+            // Initialize playback simulation timer
+            if (isPlaying && _videoPlayTimer == null) {
+              _videoPlayTimer = Timer.periodic(const Duration(milliseconds: 800), (timer) {
+                if (!isPlaying || !mounted) return;
+                
+                setVideoState(() {
+                  if (progress < 1.0) {
+                    progress = (progress + 0.005).clamp(0.0, 1.0);
+                    if (progress > maxWatchedProgress) {
+                      maxWatchedProgress = progress;
+                    }
+                  } else {
+                    _videoPlayTimer?.cancel();
+                    _videoPlayTimer = null;
+                  }
+                });
+              });
+            }
+
             return AlertDialog(
               backgroundColor: Colors.black87,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
@@ -37,11 +62,17 @@ class _RecordedClassesScreenState extends State<RecordedClassesScreen> {
                       ),
                       IconButton(
                         icon: const Icon(Icons.close, color: Colors.white70, size: 20),
-                        onPressed: () => Navigator.pop(context),
+                        onPressed: () {
+                          _videoPlayTimer?.cancel();
+                          _videoPlayTimer = null;
+                          Navigator.pop(context);
+                        },
                       )
                     ],
                   ),
                   const SizedBox(height: 12),
+                  
+                  // Video Screen
                   Container(
                     height: 160,
                     width: double.infinity,
@@ -65,29 +96,75 @@ class _RecordedClassesScreenState extends State<RecordedClassesScreen> {
                             ),
                           ],
                         ),
-                        if (isPlaying)
-                          Positioned(
-                            bottom: 12,
-                            left: 12,
-                            right: 12,
-                            child: LinearProgressIndicator(
-                              value: progress,
-                              backgroundColor: Colors.white24,
-                              valueColor: const AlwaysStoppedAnimation<Color>(Colors.greenAccent),
-                            ),
-                          ),
                       ],
                     ),
                   ),
+                  const SizedBox(height: 12),
+
+                  // Integrity Seek Bar (Custom Slider)
+                  SliderTheme(
+                    data: SliderTheme.of(context).copyWith(
+                      thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+                      trackHeight: 4,
+                      activeTrackColor: Colors.greenAccent,
+                      inactiveTrackColor: Colors.white24,
+                      thumbColor: Colors.greenAccent,
+                    ),
+                    child: Slider(
+                      value: progress,
+                      min: 0.0,
+                      max: 1.0,
+                      onChanged: (newVal) {
+                        setVideoState(() {
+                          if (newVal > maxWatchedProgress) {
+                            // Block seeking forward beyond watched threshold!
+                            ScaffoldMessenger.of(context).clearSnackBars();
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  '🔒 First Watch Lock: You cannot fast-forward! Please watch the full lecture first.',
+                                  style: GoogleFonts.fredoka(fontSize: 11),
+                                ),
+                                duration: const Duration(seconds: 2),
+                                behavior: SnackBarBehavior.floating,
+                                backgroundColor: Colors.redAccent,
+                              ),
+                            );
+                            progress = maxWatchedProgress; // clamp
+                          } else {
+                            // Rewinding is fully allowed!
+                            progress = newVal;
+                          }
+                        });
+                      },
+                    ),
+                  ),
+                  
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        '${(progress * 52).toStringAsFixed(1)} mins',
+                        style: GoogleFonts.outfit(color: Colors.white70, fontSize: 10),
+                      ),
+                      Text(
+                        'Total 52:00 mins',
+                        style: GoogleFonts.outfit(color: Colors.white60, fontSize: 10),
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 16),
+
+                  // Media Controls
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
+                      // Rewind 10 Sec is fully active and allowed
                       IconButton(
                         icon: const Icon(Icons.replay_10_rounded, color: Colors.white, size: 28),
                         onPressed: () {
                           setVideoState(() {
-                            progress = (progress - 0.05).clamp(0.0, 1.0);
+                            progress = (progress - 0.03).clamp(0.0, 1.0);
                           });
                         },
                       ),
@@ -101,24 +178,43 @@ class _RecordedClassesScreenState extends State<RecordedClassesScreen> {
                         onPressed: () {
                           setVideoState(() {
                             isPlaying = !isPlaying;
+                            if (!isPlaying) {
+                              _videoPlayTimer?.cancel();
+                              _videoPlayTimer = null;
+                            }
                           });
                         },
                       ),
                       const SizedBox(width: 16),
+                      // Forward is locked beyond max watched progress!
                       IconButton(
-                        icon: const Icon(Icons.forward_10_rounded, color: Colors.white, size: 28),
+                        icon: Icon(
+                          Icons.forward_10_rounded, 
+                          color: progress >= maxWatchedProgress ? Colors.white24 : Colors.white, 
+                          size: 28
+                        ),
                         onPressed: () {
-                          setVideoState(() {
-                            progress = (progress + 0.05).clamp(0.0, 1.0);
-                          });
+                          if (progress >= maxWatchedProgress) {
+                            ScaffoldMessenger.of(context).clearSnackBars();
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  '🔒 Fast-forward is locked for your first watch!',
+                                  style: GoogleFonts.fredoka(fontSize: 11),
+                                ),
+                                duration: const Duration(seconds: 1),
+                                behavior: SnackBarBehavior.floating,
+                                backgroundColor: Colors.redAccent,
+                              ),
+                            );
+                          } else {
+                            setVideoState(() {
+                              progress = (progress + 0.03).clamp(0.0, maxWatchedProgress);
+                            });
+                          }
                         },
                       ),
                     ],
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    '${(progress * 52).toStringAsFixed(1)} mins / 52:00 mins',
-                    style: GoogleFonts.outfit(color: Colors.white70, fontSize: 11),
                   ),
                 ],
               ),

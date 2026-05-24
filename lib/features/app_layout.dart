@@ -98,6 +98,202 @@ class _AppLayoutState extends State<AppLayout> {
     );
   }
 
+  void _showChatbotDialog(BuildContext context) {
+    final messageController = TextEditingController();
+    final List<Map<String, dynamic>> initialMessages = [
+      {'sender': 'bot', 'text': 'Hello Aarav! 🤖 I am Adyapan AI Assistant. How can I help you study today? 📚'},
+    ];
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        List<Map<String, dynamic>> messages = List.from(initialMessages);
+        
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              backgroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+              contentPadding: EdgeInsets.zero,
+              title: Container(
+                padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Color(0xFF2563EB), Color(0xFF4F46E5)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.only(
+                    topLeft: Radius.circular(24),
+                    topRight: Radius.circular(24),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    const Text('🤖', style: TextStyle(fontSize: 22)),
+                    const SizedBox(width: 10),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Adyapan AI',
+                          style: GoogleFonts.fredoka(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                        ),
+                        Text(
+                          'Online Assistant',
+                          style: GoogleFonts.outfit(fontSize: 10, color: Colors.white70, fontWeight: FontWeight.w600),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              content: Container(
+                width: 320,
+                height: 380,
+                color: const Color(0xFFF8FAFC),
+                child: Column(
+                  children: [
+                    // Chat Messages list
+                    Expanded(
+                      child: ListView.builder(
+                        padding: const EdgeInsets.all(14),
+                        itemCount: messages.length,
+                        itemBuilder: (context, index) {
+                          final msg = messages[index];
+                          final isBot = msg['sender'] == 'bot';
+                          return Align(
+                            alignment: isBot ? Alignment.centerLeft : Alignment.centerRight,
+                            child: Container(
+                              margin: const EdgeInsets.symmetric(vertical: 4),
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                              decoration: BoxDecoration(
+                                color: isBot ? Colors.white : const Color(0xFF3B82F6),
+                                borderRadius: BorderRadius.only(
+                                  topLeft: const Radius.circular(16),
+                                  topRight: const Radius.circular(16),
+                                  bottomLeft: isBot ? Radius.zero : const Radius.circular(16),
+                                  bottomRight: isBot ? const Radius.circular(16) : Radius.zero,
+                                ),
+                                border: isBot ? Border.all(color: const Color(0xFFE2E8F0)) : null,
+                                boxShadow: isBot ? [const BoxShadow(color: Colors.black12, blurRadius: 2, offset: Offset(0, 1))] : null,
+                              ),
+                              child: Text(
+                                msg['text'],
+                                style: GoogleFonts.outfit(
+                                  fontSize: 12,
+                                  color: isBot ? const Color(0xFF1E293B) : Colors.white,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    
+                    // Input bar
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: const BoxDecoration(
+                        color: Colors.white,
+                        border: Border(top: BorderSide(color: Color(0xFFE2E8F0))),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Container(
+                              height: 36,
+                              padding: const EdgeInsets.symmetric(horizontal: 12),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF1F5F9),
+                                borderRadius: BorderRadius.circular(18),
+                              ),
+                              child: TextField(
+                                controller: messageController,
+                                style: GoogleFonts.outfit(fontSize: 12, color: const Color(0xFF1E293B)),
+                                decoration: InputDecoration(
+                                  hintText: 'Ask anything...',
+                                  hintStyle: GoogleFonts.outfit(fontSize: 12, color: const Color(0xFF94A3B8)),
+                                  border: InputBorder.none,
+                                  isDense: true,
+                                ),
+                                onSubmitted: (value) {
+                                  if (value.trim().isNotEmpty) {
+                                    final text = value.trim();
+                                    messageController.clear();
+                                    setDialogState(() {
+                                      messages.add({'sender': 'user', 'text': text});
+                                    });
+                                    // Generate delayed smart reply
+                                    Future.delayed(const Duration(milliseconds: 650), () {
+                                      String botReply = "That's a great question! Keep studying and you'll master it! 🚀";
+                                      if (text.toLowerCase().contains('math') || text.toLowerCase().contains('homework')) {
+                                        botReply = "Math is all about practice! Try playing the Quiz Arena in the Gamified tab to earn +20 XP! 🧮";
+                                      } else if (text.toLowerCase().contains('xp') || text.toLowerCase().contains('level')) {
+                                        botReply = "You can earn XP by completing focus sessions, homework, and roadmaps! 🏆";
+                                      } else if (text.toLowerCase().contains('hello') || text.toLowerCase().contains('hi')) {
+                                        botReply = "Hello Aarav! How are you doing today? Ready to learn something new? 🌟";
+                                      }
+                                      setDialogState(() {
+                                        messages.add({'sender': 'bot', 'text': botReply});
+                                      });
+                                    });
+                                  }
+                                },
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          // Send button
+                          GestureDetector(
+                            onTap: () {
+                              if (messageController.text.trim().isNotEmpty) {
+                                final text = messageController.text.trim();
+                                messageController.clear();
+                                setDialogState(() {
+                                  messages.add({'sender': 'user', 'text': text});
+                                });
+                                // Generate delayed smart reply
+                                Future.delayed(const Duration(milliseconds: 650), () {
+                                  String botReply = "That's a great question! Keep studying and you'll master it! 🚀";
+                                  if (text.toLowerCase().contains('math') || text.toLowerCase().contains('homework')) {
+                                    botReply = "Math is all about practice! Try playing the Quiz Arena in the Gamified tab to earn +20 XP! 🧮";
+                                  } else if (text.toLowerCase().contains('xp') || text.toLowerCase().contains('level')) {
+                                    botReply = "You can earn XP by completing focus sessions, homework, and roadmaps! 🏆";
+                                  } else if (text.toLowerCase().contains('hello') || text.toLowerCase().contains('hi')) {
+                                    botReply = "Hello Aarav! How are you doing today? Ready to learn something new? 🌟";
+                                  }
+                                  setDialogState(() {
+                                    messages.add({'sender': 'bot', 'text': botReply});
+                                  });
+                                });
+                              }
+                            },
+                            child: Container(
+                              width: 32,
+                              height: 32,
+                              decoration: const BoxDecoration(
+                                color: Color(0xFF3B82F6),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.send_rounded, color: Colors.white, size: 14),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+
   void _showHelpDialog(BuildContext context) {
     showDialog(
       context: context,
@@ -301,12 +497,30 @@ class _AppLayoutState extends State<AppLayout> {
                                 ],
                               ),
                             ),
+<<<<<<< Updated upstream
                             const SizedBox(width: 8),
                             const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white70, size: 14),
                           ],
                         ),
                       ],
                     ),
+=======
+                          ),
+                          const Spacer(),
+                          const SizedBox.shrink(),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Aarav Sharma',
+                        style: GoogleFonts.fredoka(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+                      ),
+                      Text(
+                        'aarav.sharma@school.com',
+                        style: GoogleFonts.outfit(fontSize: 12, color: Colors.white70, fontWeight: FontWeight.w500),
+                      ),
+                    ],
+>>>>>>> Stashed changes
                   ),
                 ),
                 
@@ -449,7 +663,7 @@ class _AppLayoutState extends State<AppLayout> {
       ),
       // 2. High-floating Add Quick Quest Button (Doesn't overlap and floats nicely!)
       floatingActionButton: FloatingActionButton(
-        onPressed: () => _showQuickAddTaskDialog(context),
+        onPressed: () => _showChatbotDialog(context),
         backgroundColor: Colors.transparent,
         elevation: 0,
         highlightElevation: 0,
@@ -471,7 +685,7 @@ class _AppLayoutState extends State<AppLayout> {
               )
             ],
           ),
-          child: const Icon(Icons.add, color: Colors.white, size: 24),
+          child: const Icon(Icons.smart_toy_rounded, color: Colors.white, size: 24),
         ),
       ),
       bottomNavigationBar: Container(
