@@ -3,6 +3,12 @@ import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../core/theme.dart';
 import '../core/app_state.dart';
+import 'attendance_screen.dart';
+import 'homework_screen.dart';
+import 'notes_library_screen.dart';
+import 'live_classes_screen.dart';
+import 'recorded_classes_screen.dart';
+import 'doubt_solver_screen.dart';
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({Key? key}) : super(key: key);
@@ -20,13 +26,17 @@ class DashboardScreen extends StatelessWidget {
         const SnackBar(content: Text('📈 Loading academic progress roadmaps!'), backgroundColor: AdyapanTheme.blueAccent, duration: Duration(seconds: 1)),
       );
     } else if (cardTitle == 'Attendance') {
-      _showAttendanceDetails(context);
+      Navigator.push(context, MaterialPageRoute(builder: (_) => const AttendanceScreen()));
     } else if (cardTitle == 'Homework') {
-      _showHomeworkList(context, state);
+      Navigator.push(context, MaterialPageRoute(builder: (_) => const HomeworkScreen()));
     } else if (cardTitle == 'Notes & PDFs') {
-      _showNotesAndPdfs(context);
+      Navigator.push(context, MaterialPageRoute(builder: (_) => const NotesLibraryScreen()));
     } else if (cardTitle == 'Live Classes') {
-      _showLiveClasses(context);
+      Navigator.push(context, MaterialPageRoute(builder: (_) => const LiveClassesScreen()));
+    } else if (cardTitle == 'Recorded Classes') {
+      Navigator.push(context, MaterialPageRoute(builder: (_) => const RecordedClassesScreen()));
+    } else if (cardTitle == 'Doubt Sessions') {
+      Navigator.push(context, MaterialPageRoute(builder: (_) => const DoubtSolverScreen()));
     }
   }
 
@@ -290,11 +300,23 @@ class DashboardScreen extends StatelessWidget {
         }
 
         return Scaffold(
-          backgroundColor: const Color(0xFFF8FAFC), // Ultra-clean brightness slate
-          body: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
+          backgroundColor: const Color(0xFFF1F5F9),
+          body: Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  Color(0xFFEEF2F6), // Soft lavender grey
+                  Color(0xFFE0E7FF), // Soft indigo
+                  Color(0xFFFFF0F5), // Soft pastel pink
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                 // 1. LAYERED ULTRA-PREMIUM VIBRANT BLUE HEADER BLOCK
                 Stack(
                   clipBehavior: Clip.none,
@@ -391,32 +413,6 @@ class DashboardScreen extends StatelessWidget {
                               ),
                               const SizedBox(width: 8),
 
-                              // Streak Chip
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF1E3A8A).withOpacity(0.08),
-                                  borderRadius: BorderRadius.circular(50),
-                                  border: Border.all(color: const Color(0xFF1E3A8A).withOpacity(0.15)),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    const Text('🔥', style: TextStyle(fontSize: 12)),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      '${state.streak}',
-                                      style: GoogleFonts.fredoka(
-                                        fontSize: 11, 
-                                        color: const Color(0xFF1E3A8A), 
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-
                               // Notification Bell Icon with pulse ring
                               Container(
                                 width: 34,
@@ -438,20 +434,6 @@ class DashboardScreen extends StatelessWidget {
                                     ),
                                   ],
                                 ),
-                              ),
-                              const SizedBox(width: 8),
-
-                              // Shield Icon
-                              Container(
-                                width: 34,
-                                height: 34,
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF1E3A8A).withOpacity(0.08),
-                                  shape: BoxShape.circle,
-                                  border: Border.all(color: const Color(0xFF1E3A8A).withOpacity(0.15)),
-                                ),
-                                alignment: Alignment.center,
-                                child: const Icon(Icons.shield_outlined, color: Color(0xFF1E3A8A), size: 16),
                               ),
                             ],
                           ),
@@ -521,21 +503,21 @@ class DashboardScreen extends StatelessWidget {
                   child: Container(
                     padding: const EdgeInsets.symmetric(vertical: 20),
                     decoration: BoxDecoration(
-                      color: Colors.white,
-                      border: Border.all(color: const Color(0xFF3B82F6).withOpacity(0.25), width: 2),
+                      color: Colors.white.withOpacity(0.82),
+                      border: Border.all(color: const Color(0xFF3B82F6).withOpacity(0.18), width: 1.5),
                       borderRadius: BorderRadius.circular(24),
                       boxShadow: [
-                        // 3D Solid Depth Shadow
                         BoxShadow(
-                          color: const Color(0xFF2563EB).withOpacity(0.12),
-                          offset: const Offset(0, 6),
-                          blurRadius: 0,
+                          color: const Color(0xFF2563EB).withOpacity(0.15),
+                          offset: const Offset(0, 4),
+                          blurRadius: 12,
+                          spreadRadius: 1,
                         ),
-                        // Soft ambient
                         BoxShadow(
-                          color: const Color(0xFF2563EB).withOpacity(0.04),
-                          offset: const Offset(0, 2),
-                          blurRadius: 8,
+                          color: Colors.white.withOpacity(0.5),
+                          offset: const Offset(-2, -2),
+                          blurRadius: 6,
+                          spreadRadius: 0,
                         ),
                       ],
                     ),
@@ -605,9 +587,39 @@ class DashboardScreen extends StatelessWidget {
                         children: [
                           Expanded(child: _buildGridCard(context, state, '📄', 'Notes & PDFs', '128 files', const Color(0xFFFAF5FF), const Color(0xFF8B5CF6))),
                           const SizedBox(width: 12),
+                          Expanded(
+                            child: _buildGridCard(
+                              context,
+                              state,
+                              '📹', 
+                              'Recorded Classes', 
+                              '42 videos', 
+                              const Color(0xFFECFDF5),
+                              const Color(0xFF10B981),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _buildGridCard(
+                              context,
+                              state,
+                              '🙋', 
+                              'Doubt Sessions', 
+                              'Ask Tutors', 
+                              const Color(0xFFFFF1F2),
+                              const Color(0xFFF43F5E),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
                           Expanded(child: _buildGridCard(context, state, '🎮', 'Gemified', '3 games', const Color(0xFFF5F3FF), const Color(0xFF6366F1))),
                           const SizedBox(width: 12),
-                          Expanded(child: _buildGridCard(context, state, '📈', 'Progress', '+12%', const Color(0xFFECFDF5), const Color(0xFF10B981))),
+                          Expanded(child: _buildGridCard(context, state, '📈', 'Progress', '+12%', const Color(0xFFEFF6FF), const Color(0xFF2563EB))),
+                          const SizedBox(width: 12),
+                          const Spacer(), // Perfect layout symmetry
                         ],
                       ),
                     ],
@@ -643,21 +655,21 @@ class DashboardScreen extends StatelessWidget {
                   child: Container(
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      color: Colors.white,
-                      border: Border.all(color: const Color(0xFF3B82F6).withOpacity(0.25), width: 2),
+                      color: Colors.white.withOpacity(0.82),
+                      border: Border.all(color: const Color(0xFF3B82F6).withOpacity(0.18), width: 1.5),
                       borderRadius: BorderRadius.circular(20),
                       boxShadow: [
-                        // 3D Depth
                         BoxShadow(
-                          color: const Color(0xFF2563EB).withOpacity(0.12),
-                          offset: const Offset(0, 6),
-                          blurRadius: 0,
+                          color: const Color(0xFF2563EB).withOpacity(0.15),
+                          offset: const Offset(0, 4),
+                          blurRadius: 12,
+                          spreadRadius: 1,
                         ),
-                        // Ambient
                         BoxShadow(
-                          color: const Color(0xFF2563EB).withOpacity(0.04),
-                          offset: const Offset(0, 2),
-                          blurRadius: 8,
+                          color: Colors.white.withOpacity(0.5),
+                          offset: const Offset(-2, -2),
+                          blurRadius: 6,
+                          spreadRadius: 0,
                         ),
                       ],
                     ),
@@ -708,7 +720,7 @@ class DashboardScreen extends StatelessWidget {
                         
                         // Active Join Button Chip (Clickable!)
                         GestureDetector(
-                          onTap: () => _showLiveClasses(context),
+                          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const LiveClassesScreen())),
                           child: Container(
                             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                             decoration: BoxDecoration(
@@ -742,11 +754,234 @@ class DashboardScreen extends StatelessWidget {
                     ),
                   ),
                 ),
+                const SizedBox(height: 26),
+
+                // 6. RECORDED CLASSES SECTION
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Recorded classes',
+                        style: GoogleFonts.fredoka(fontSize: 18, fontWeight: FontWeight.bold, color: AdyapanTheme.textMain),
+                      ),
+                      TextButton(
+                        onPressed: () => _showRecordedClassesList(context),
+                        child: Text(
+                          'View all',
+                          style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.blueAccent),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 6),
+
+                // Recorded classes card
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                  child: Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.82),
+                      border: Border.all(color: const Color(0xFF10B981).withOpacity(0.18), width: 1.5),
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF10B981).withOpacity(0.15),
+                          offset: const Offset(0, 4),
+                          blurRadius: 12,
+                          spreadRadius: 1,
+                        ),
+                        BoxShadow(
+                          color: Colors.white.withOpacity(0.5),
+                          offset: const Offset(-2, -2),
+                          blurRadius: 6,
+                          spreadRadius: 0,
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 48,
+                          height: 48,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFECFDF5),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: const Color(0xFFA7F3D0), width: 1.2),
+                          ),
+                          alignment: Alignment.center,
+                          child: const Text('📹', style: TextStyle(fontSize: 22)),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Science: Atomic Structure',
+                                style: GoogleFonts.fredoka(fontSize: 15, fontWeight: FontWeight.bold, color: AdyapanTheme.textMain),
+                              ),
+                              Text(
+                                'Recorded • 52 mins • Mr. Verma',
+                                style: GoogleFonts.outfit(fontSize: 11, color: AdyapanTheme.textSub, fontWeight: FontWeight.w500),
+                              ),
+                            ],
+                          ),
+                        ),
+                        GestureDetector(
+                          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RecordedClassesScreen())),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(
+                                colors: [Color(0xFF10B981), Color(0xFF059669)],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                              borderRadius: BorderRadius.circular(30),
+                              border: Border.all(color: const Color(0xFF047857).withOpacity(0.3), width: 1.5),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(0xFF047857).withOpacity(0.2),
+                                  offset: const Offset(0, 3),
+                                  blurRadius: 0,
+                                )
+                              ],
+                            ),
+                            child: Text(
+                              'Play',
+                              style: GoogleFonts.fredoka(
+                                fontSize: 12, 
+                                color: Colors.white, 
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        )
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 26),
+
+                // 7. DOUBT CLEARING SESSIONS SECTION
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Doubt clearing sessions',
+                        style: GoogleFonts.fredoka(fontSize: 18, fontWeight: FontWeight.bold, color: AdyapanTheme.textMain),
+                      ),
+                      TextButton(
+                        onPressed: () => _showDoubtSessions(context),
+                        child: Text(
+                          'Ask Doubt',
+                          style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.blueAccent),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 6),
+
+                // Doubt session card
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                  child: Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.82),
+                      border: Border.all(color: const Color(0xFFF43F5E).withOpacity(0.18), width: 1.5),
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFFF43F5E).withOpacity(0.15),
+                          offset: const Offset(0, 4),
+                          blurRadius: 12,
+                          spreadRadius: 1,
+                        ),
+                        BoxShadow(
+                          color: Colors.white.withOpacity(0.5),
+                          offset: const Offset(-2, -2),
+                          blurRadius: 6,
+                          spreadRadius: 0,
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 48,
+                          height: 48,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFFF1F2),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: const Color(0xFFFECDD3), width: 1.2),
+                          ),
+                          alignment: Alignment.center,
+                          child: const Text('🙋', style: TextStyle(fontSize: 22)),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Mathematics Doubt Room',
+                                style: GoogleFonts.fredoka(fontSize: 15, fontWeight: FontWeight.bold, color: AdyapanTheme.textMain),
+                              ),
+                              Text(
+                                'LIVE • 12 active students • 2 mentors',
+                                style: GoogleFonts.outfit(fontSize: 11, color: AdyapanTheme.textSub, fontWeight: FontWeight.w500),
+                              ),
+                            ],
+                          ),
+                        ),
+                        GestureDetector(
+                          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DoubtSolverScreen())),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(
+                                colors: [Color(0xFFF43F5E), Color(0xFFE11D48)],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                              borderRadius: BorderRadius.circular(30),
+                              border: Border.all(color: const Color(0xFFBE123C).withOpacity(0.3), width: 1.5),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(0xFFBE123C).withOpacity(0.2),
+                                  offset: const Offset(0, 3),
+                                  blurRadius: 0,
+                                )
+                              ],
+                            ),
+                            child: Text(
+                              'Connect',
+                              style: GoogleFonts.fredoka(
+                                fontSize: 12, 
+                                color: Colors.white, 
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        )
+                      ],
+                    ),
+                  ),
+                ),
                 const SizedBox(height: 40),
               ],
             ),
           ),
-        );
+        ),
+      );
       },
     );
   }
@@ -785,21 +1020,21 @@ class DashboardScreen extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 18),
         decoration: BoxDecoration(
-          color: Colors.white,
-          border: Border.all(color: accentColor.withOpacity(0.25), width: 2),
+          color: Colors.white.withOpacity(0.82),
+          border: Border.all(color: accentColor.withOpacity(0.18), width: 1.5),
           borderRadius: BorderRadius.circular(20),
           boxShadow: [
-            // 3D Solid Colored Bottom Shadow
             BoxShadow(
-              color: accentColor.withOpacity(0.12),
-              offset: const Offset(0, 6),
-              blurRadius: 0,
+              color: accentColor.withOpacity(0.15),
+              offset: const Offset(0, 4),
+              blurRadius: 12,
+              spreadRadius: 1,
             ),
-            // Soft ambient
             BoxShadow(
-              color: accentColor.withOpacity(0.04),
-              offset: const Offset(0, 2),
-              blurRadius: 8,
+              color: Colors.white.withOpacity(0.5),
+              offset: const Offset(-2, -2),
+              blurRadius: 6,
+              spreadRadius: 0,
             ),
           ],
         ),
@@ -873,6 +1108,343 @@ class DashboardScreen extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+
+  // 6. Library of Recorded Classes modal
+  void _showRecordedClassesList(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: Text('📹 Library of Recorded Classes', style: GoogleFonts.fredoka(fontSize: 18, fontWeight: FontWeight.bold, color: AdyapanTheme.blueAccent)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Select a class to watch lecture playbacks.', style: GoogleFonts.outfit(fontSize: 12, color: AdyapanTheme.textSub)),
+            const SizedBox(height: 12),
+            _buildRecordedClassItem(context, '📐 Math: Quadratic Equations (Part 1)', '45 mins • Mrs. Sharma'),
+            _buildRecordedClassItem(context, '⚛️ Science: Atomic Orbitals & Shells', '52 mins • Mr. Verma'),
+            _buildRecordedClassItem(context, '📖 English: Active & Passive Voices', '30 mins • Miss Anjali'),
+          ],
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context),
+            style: ElevatedButton.styleFrom(backgroundColor: AdyapanTheme.blueAccent, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(50))),
+            child: Text('Close', style: GoogleFonts.fredoka(color: Colors.white)),
+          )
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRecordedClassItem(BuildContext context, String title, String meta) {
+    return Card(
+      elevation: 0,
+      color: AdyapanTheme.bgLightDark,
+      margin: const EdgeInsets.symmetric(vertical: 4),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: ListTile(
+        leading: const Icon(Icons.play_circle_outline, color: Colors.green, size: 24),
+        title: Text(title, style: GoogleFonts.fredoka(fontSize: 12, fontWeight: FontWeight.bold)),
+        subtitle: Text(meta, style: GoogleFonts.outfit(fontSize: 10, color: AdyapanTheme.textSub)),
+        trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 12, color: AdyapanTheme.textMuted),
+        onTap: () {
+          Navigator.pop(context); // Close selection list
+          _simulatePlayVideo(context, title);
+        },
+      ),
+    );
+  }
+
+  // 6b. Simulated Video Player
+  void _simulatePlayVideo(BuildContext context, String videoTitle) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        bool isPlaying = true;
+        double progress = 0.15;
+        return StatefulBuilder(
+          builder: (context, setVideoState) {
+            return AlertDialog(
+              backgroundColor: Colors.black87,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+              contentPadding: const EdgeInsets.all(16),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          videoTitle,
+                          style: GoogleFonts.fredoka(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close, color: Colors.white70, size: 20),
+                        onPressed: () => Navigator.pop(context),
+                      )
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Container(
+                    height: 160,
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      color: Colors.black87,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.white24),
+                    ),
+                    alignment: Alignment.center,
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Text('📺', style: TextStyle(fontSize: 48)),
+                            const SizedBox(height: 8),
+                            Text(
+                              isPlaying ? 'Playing Lecture Video...' : 'Lecture Paused',
+                              style: GoogleFonts.outfit(color: Colors.white60, fontSize: 11),
+                            ),
+                          ],
+                        ),
+                        if (isPlaying)
+                          Positioned(
+                            bottom: 12,
+                            left: 12,
+                            right: 12,
+                            child: LinearProgressIndicator(
+                              value: progress,
+                              backgroundColor: Colors.white24,
+                              valueColor: const AlwaysStoppedAnimation<Color>(Colors.greenAccent),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.replay_10_rounded, color: Colors.white, size: 28),
+                        onPressed: () {
+                          setVideoState(() {
+                            progress = (progress - 0.05).clamp(0.0, 1.0);
+                          });
+                        },
+                      ),
+                      const SizedBox(width: 16),
+                      IconButton(
+                        icon: Icon(
+                          isPlaying ? Icons.pause_circle_filled_rounded : Icons.play_circle_filled_rounded,
+                          color: Colors.greenAccent,
+                          size: 54,
+                        ),
+                        onPressed: () {
+                          setVideoState(() {
+                            isPlaying = !isPlaying;
+                          });
+                        },
+                      ),
+                      const SizedBox(width: 16),
+                      IconButton(
+                        icon: const Icon(Icons.forward_10_rounded, color: Colors.white, size: 28),
+                        onPressed: () {
+                          setVideoState(() {
+                            progress = (progress + 0.05).clamp(0.0, 1.0);
+                          });
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '${(progress * 52).toStringAsFixed(1)} mins / 52:00 mins',
+                    style: GoogleFonts.outfit(color: Colors.white70, fontSize: 11),
+                  ),
+                ],
+              ),
+            );
+          }
+        );
+      }
+    );
+  }
+
+  // 7. Doubt Solver Room modal
+  void _showDoubtSessions(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        String activeSubject = 'Mathematics';
+        final TextEditingController doubtController = TextEditingController();
+        bool isSubmitting = false;
+        bool chatSimulated = false;
+        List<Map<String, String>> chatMessages = [];
+
+        return StatefulBuilder(
+          builder: (context, setDoubtState) {
+            return AlertDialog(
+              backgroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+              title: Text('🙋 Doubt Solver Room', style: GoogleFonts.fredoka(fontSize: 18, fontWeight: FontWeight.bold, color: AdyapanTheme.pink)),
+              content: Container(
+                width: double.maxFinite,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (!chatSimulated) ...[
+                      Text('Get answers instantly from active 24/7 mentors!', style: GoogleFonts.outfit(fontSize: 12, color: AdyapanTheme.textSub)),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: ['Mathematics', 'Science', 'English'].map((subject) {
+                          bool isSel = activeSubject == subject;
+                          return Padding(
+                            padding: const EdgeInsets.only(right: 6.0),
+                            child: GestureDetector(
+                              onTap: () => setDoubtState(() => activeSubject = subject),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: isSel ? AdyapanTheme.pink.withOpacity(0.1) : AdyapanTheme.bgLightDark,
+                                  borderRadius: BorderRadius.circular(30),
+                                  border: Border.all(color: isSel ? AdyapanTheme.pink : AdyapanTheme.glassBorder, width: 1.2),
+                                ),
+                                child: Text(
+                                  subject,
+                                  style: GoogleFonts.fredoka(fontSize: 10, fontWeight: FontWeight.bold, color: isSel ? AdyapanTheme.pink : AdyapanTheme.textMain),
+                                ),
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: doubtController,
+                        maxLines: 3,
+                        style: GoogleFonts.outfit(fontSize: 12),
+                        decoration: InputDecoration(
+                          hintText: 'Describe your question or doubt here...',
+                          hintStyle: GoogleFonts.outfit(fontSize: 12, color: AdyapanTheme.textMuted),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: AdyapanTheme.glassBorder)),
+                          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: AdyapanTheme.pink, width: 1.5)),
+                          contentPadding: const EdgeInsets.all(12),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: isSubmitting ? null : () {
+                            if (doubtController.text.trim().isEmpty) return;
+                            setDoubtState(() {
+                              isSubmitting = true;
+                            });
+                            Future.delayed(const Duration(seconds: 2), () {
+                              setDoubtState(() {
+                                isSubmitting = false;
+                                chatSimulated = true;
+                                chatMessages.add({'sender': 'Aarav', 'msg': doubtController.text});
+                                chatMessages.add({
+                                  'sender': 'Tutor',
+                                  'msg': 'Hello Aarav! I am Mr. Verma, your $activeSubject tutor. I see your doubt regarding "${doubtController.text}". That is a fantastic question! Let\'s solve this step by step. Tell me, which part are you finding difficult?'
+                                });
+                              });
+                            });
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AdyapanTheme.pink,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(50)),
+                          ),
+                          child: isSubmitting
+                              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                              : Text('Connect to Live Tutor', style: GoogleFonts.fredoka(color: Colors.white, fontSize: 13)),
+                        ),
+                      )
+                    ] else ...[
+                      Container(
+                        height: 200,
+                        child: ListView.builder(
+                          itemCount: chatMessages.length,
+                          itemBuilder: (context, index) {
+                            var msg = chatMessages[index];
+                            bool isMe = msg['sender'] == 'Aarav';
+                            return Align(
+                              alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+                              child: Container(
+                                margin: const EdgeInsets.symmetric(vertical: 4),
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: isMe ? AdyapanTheme.pink.withOpacity(0.1) : AdyapanTheme.bgLightDark,
+                                  borderRadius: BorderRadius.only(
+                                    topLeft: const Radius.circular(12),
+                                    topRight: const Radius.circular(12),
+                                    bottomLeft: isMe ? const Radius.circular(12) : Radius.zero,
+                                    bottomRight: isMe ? Radius.zero : const Radius.circular(12),
+                                  ),
+                                  border: Border.all(color: isMe ? AdyapanTheme.pink.withOpacity(0.3) : AdyapanTheme.glassBorder),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(msg['sender']!, style: GoogleFonts.fredoka(fontSize: 9, fontWeight: FontWeight.bold, color: isMe ? AdyapanTheme.pink : Colors.blueGrey)),
+                                    const SizedBox(height: 2),
+                                    Text(msg['msg']!, style: GoogleFonts.outfit(fontSize: 11)),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              decoration: InputDecoration(
+                                hintText: 'Type message...',
+                                hintStyle: GoogleFonts.outfit(fontSize: 11),
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(30)),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 14),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          CircleAvatar(
+                            backgroundColor: AdyapanTheme.pink,
+                            radius: 18,
+                            child: IconButton(
+                              icon: const Icon(Icons.send, color: Colors.white, size: 14),
+                              onPressed: () {},
+                            ),
+                          )
+                        ],
+                      )
+                    ]
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text('Close', style: GoogleFonts.fredoka(color: AdyapanTheme.textSub)),
+                )
+              ],
+            );
+          }
+        );
+      }
     );
   }
 }

@@ -124,17 +124,30 @@ class _AppLayoutState extends State<AppLayout> {
 
   Widget _buildDrawerItem({required IconData icon, required String title, Color? iconColor, required VoidCallback onTap}) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 4.0),
-      child: ListTile(
-        leading: Icon(icon, color: iconColor ?? AdyapanTheme.blueAccent, size: 20),
-        title: Text(
-          title,
-          style: GoogleFonts.fredoka(fontSize: 13, fontWeight: FontWeight.bold, color: AdyapanTheme.textMain),
+      padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 6.0),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.55),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.white.withOpacity(0.3), width: 1.2),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.01),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
+            )
+          ],
         ),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        hoverColor: Colors.blue.withOpacity(0.05),
-        onTap: onTap,
-        dense: true,
+        child: ListTile(
+          leading: Icon(icon, color: iconColor ?? AdyapanTheme.blueAccent, size: 20),
+          title: Text(
+            title,
+            style: GoogleFonts.fredoka(fontSize: 13, fontWeight: FontWeight.bold, color: AdyapanTheme.textMain),
+          ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          onTap: onTap,
+          dense: true,
+        ),
       ),
     );
   }
@@ -147,13 +160,24 @@ class _AppLayoutState extends State<AppLayout> {
       backgroundColor: AdyapanTheme.bgDark,
       // 1. Sleek Navigation Drawer (Secondary controls)
       drawer: Drawer(
-        backgroundColor: const Color(0xFFF8FAFC),
-        child: Consumer<AppState>(
-          builder: (context, state, child) {
-            double xpProgress = (state.xp % 200) / 200.0;
-            int xpInCurrentLevel = state.xp % 200;
-            
-            return Column(
+        backgroundColor: Colors.transparent, // Allow glass gradient to show
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                const Color(0xFFEEF2F6).withOpacity(0.96), // Frosted glass soft lavender
+                const Color(0xFFE0E7FF).withOpacity(0.96), // Frosted glass soft indigo
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+          child: Consumer<AppState>(
+            builder: (context, state, child) {
+              double xpProgress = (state.xp % 200) / 200.0;
+              int xpInCurrentLevel = state.xp % 200;
+              
+              return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 // A. Sleek Gradient Drawer Header
@@ -235,11 +259,15 @@ class _AppLayoutState extends State<AppLayout> {
                   child: Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: Colors.white.withOpacity(0.65), // Translucent white glass
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: const Color(0xFFEFF6FF)),
+                      border: Border.all(color: Colors.white.withOpacity(0.4), width: 1.5),
                       boxShadow: [
-                        BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4))
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.02),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        )
                       ],
                     ),
                     child: Column(
@@ -355,6 +383,7 @@ class _AppLayoutState extends State<AppLayout> {
           },
         ),
       ),
+    ),
       body: IndexedStack(
         index: state.currentTab,
         children: _screens,
