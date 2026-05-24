@@ -13,10 +13,25 @@ class AppState extends ChangeNotifier {
   int _streak = 3;
   String _avatar = '⚡';
 
+  // User Profile Information
+  String _studentName = 'Aarav Sharma';
+  String _studentEmail = 'aarav.sharma@school.com';
+  String _studentPhone = '9876543210';
+  String _studentClass = 'Class 10';
+  String _studentSchool = 'Adyapan Public School';
+  String _profileImagePath = '';
+
   int get xp => _xp;
   int get level => _level;
   int get streak => _streak;
   String get avatar => _avatar;
+
+  String get studentName => _studentName;
+  String get studentEmail => _studentEmail;
+  String get studentPhone => _studentPhone;
+  String get studentClass => _studentClass;
+  String get studentSchool => _studentSchool;
+  String get profileImagePath => _profileImagePath;
 
   // 1b. Reactive Bottom Bar Tab Index
   int _currentTab = 0;
@@ -111,6 +126,14 @@ class AppState extends ChangeNotifier {
     _parentQuestXp = _prefs.getInt('parent_quest_xp') ?? 150;
     _parentQuestCompleted = _prefs.getBool('parent_quest_completed') ?? false;
     _screenLimit = _prefs.getDouble('screen_limit') ?? 60.0;
+
+    // Load Profile Information
+    _studentName = _prefs.getString('student_name') ?? 'Aarav Sharma';
+    _studentEmail = _prefs.getString('student_email') ?? 'aarav.sharma@school.com';
+    _studentPhone = _prefs.getString('student_phone') ?? '9876543210';
+    _studentClass = _prefs.getString('student_class') ?? 'Class 10';
+    _studentSchool = _prefs.getString('student_school') ?? 'Adyapan Public School';
+    _profileImagePath = _prefs.getString('profile_image_path') ?? '';
 
     _initialized = true;
     notifyListeners();
@@ -218,6 +241,41 @@ class AppState extends ChangeNotifier {
   void updateScreenLimit(double minutes) {
     _screenLimit = minutes;
     _prefs.setDouble('screen_limit', minutes);
+    notifyListeners();
+  }
+
+  void updateProfile({
+    required String name,
+    required String email,
+    required String phone,
+    required String className,
+    required String school,
+    String? imagePath,
+  }) {
+    _studentName = name;
+    _studentEmail = email;
+    _studentPhone = phone;
+    _studentClass = className;
+    _studentSchool = school;
+    if (imagePath != null) {
+      _profileImagePath = imagePath;
+    }
+    
+    _prefs.setString('student_name', _studentName);
+    _prefs.setString('student_email', _studentEmail);
+    _prefs.setString('student_phone', _studentPhone);
+    _prefs.setString('student_class', _studentClass);
+    _prefs.setString('student_school', _studentSchool);
+    if (imagePath != null) {
+      _prefs.setString('profile_image_path', _profileImagePath);
+    }
+    
+    notifyListeners();
+  }
+
+  void updateProfileImage(String path) {
+    _profileImagePath = path;
+    _prefs.setString('profile_image_path', path);
     notifyListeners();
   }
 }

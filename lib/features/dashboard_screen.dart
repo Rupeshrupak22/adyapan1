@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -355,42 +356,77 @@ class DashboardScreen extends StatelessWidget {
                                   width: 50,
                                   height: 50,
                                   decoration: BoxDecoration(
-                                    gradient: const LinearGradient(
-                                      colors: [Color(0xFFFBBF24), Color(0xFFEA580C)], // Gold-to-Orange
-                                      begin: Alignment.topLeft,
-                                      end: Alignment.bottomRight,
-                                    ),
                                     shape: BoxShape.circle,
                                     border: Border.all(color: Colors.white, width: 2),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: const Color(0xFFEA580C).withOpacity(0.3),
+                                        color: Colors.black.withOpacity(0.08),
                                         blurRadius: 8,
-                                        offset: const Offset(0, 3),
+                                        offset: const Offset(0, 2),
                                       )
                                     ],
                                   ),
-                                  alignment: Alignment.center,
-                                  child: Text(
-                                    'AS',
-                                    style: GoogleFonts.fredoka(
-                                      fontSize: 16, 
-                                      fontWeight: FontWeight.bold, 
-                                      color: Colors.white,
-                                    ),
+                                  child: ClipOval(
+                                    child: state.profileImagePath.isNotEmpty
+                                        ? Image.file(
+                                            File(state.profileImagePath),
+                                            fit: BoxFit.cover,
+                                            width: 46,
+                                            height: 46,
+                                          )
+                                        : Container(
+                                            decoration: const BoxDecoration(
+                                              gradient: LinearGradient(
+                                                colors: [Color(0xFFFBBF24), Color(0xFFEA580C)], // Gold-to-Orange
+                                                begin: Alignment.topLeft,
+                                                end: Alignment.bottomRight,
+                                              ),
+                                            ),
+                                            alignment: Alignment.center,
+                                            child: () {
+                                              String initials = '';
+                                              if (state.studentName.trim().isNotEmpty) {
+                                                List<String> parts = state.studentName.trim().split(' ');
+                                                if (parts.isNotEmpty && parts[0].isNotEmpty) {
+                                                  initials += parts[0][0];
+                                                }
+                                                if (parts.length > 1 && parts[1].isNotEmpty) {
+                                                  initials += parts[1][0];
+                                                }
+                                              }
+                                              if (initials.isEmpty) initials = 'SL';
+                                              return Text(
+                                                initials.toUpperCase(),
+                                                style: GoogleFonts.fredoka(
+                                                  fontSize: 16, 
+                                                  fontWeight: FontWeight.bold, 
+                                                  color: Colors.white,
+                                                ),
+                                              );
+                                            }(),
+                                          ),
                                   ),
                                 ),
                               ),
                               const SizedBox(width: 12),
                               
-                              // Good morning Aarav
+                              // Dynamic real-time greeting based on hour
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     Text(
-                                      'Good morning,',
+                                      () {
+                                        final hour = DateTime.now().hour;
+                                        if (hour >= 5 && hour < 12) {
+                                          return 'Good morning,';
+                                        } else if (hour >= 12 && hour < 17) {
+                                          return 'Good afternoon,';
+                                        } else {
+                                          return 'Good evening,';
+                                        }
+                                      }(),
                                       style: GoogleFonts.outfit(
                                         fontSize: 11, 
                                         color: const Color(0xFF1E3A8A).withOpacity(0.7),
@@ -399,7 +435,7 @@ class DashboardScreen extends StatelessWidget {
                                       overflow: TextOverflow.ellipsis,
                                     ),
                                     Text(
-                                      'Aarav Sharma',
+                                      state.studentName,
                                       style: GoogleFonts.fredoka(
                                         fontSize: 16, 
                                         color: const Color(0xFF1E3A8A),
@@ -756,118 +792,7 @@ class DashboardScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 26),
 
-                // 6. RECORDED CLASSES SECTION
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20.0),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Recorded classes',
-                        style: GoogleFonts.fredoka(fontSize: 18, fontWeight: FontWeight.bold, color: AdyapanTheme.textMain),
-                      ),
-                      TextButton(
-                        onPressed: () => _showRecordedClassesList(context),
-                        child: Text(
-                          'View all',
-                          style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.blueAccent),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 6),
-
-                // Recorded classes card
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20.0),
-                  child: Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.82),
-                      border: Border.all(color: const Color(0xFF10B981).withOpacity(0.18), width: 1.5),
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFF10B981).withOpacity(0.15),
-                          offset: const Offset(0, 4),
-                          blurRadius: 12,
-                          spreadRadius: 1,
-                        ),
-                        BoxShadow(
-                          color: Colors.white.withOpacity(0.5),
-                          offset: const Offset(-2, -2),
-                          blurRadius: 6,
-                          spreadRadius: 0,
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 48,
-                          height: 48,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFECFDF5),
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: const Color(0xFFA7F3D0), width: 1.2),
-                          ),
-                          alignment: Alignment.center,
-                          child: const Text('📹', style: TextStyle(fontSize: 22)),
-                        ),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Science: Atomic Structure',
-                                style: GoogleFonts.fredoka(fontSize: 15, fontWeight: FontWeight.bold, color: AdyapanTheme.textMain),
-                              ),
-                              Text(
-                                'Recorded • 52 mins • Mr. Verma',
-                                style: GoogleFonts.outfit(fontSize: 11, color: AdyapanTheme.textSub, fontWeight: FontWeight.w500),
-                              ),
-                            ],
-                          ),
-                        ),
-                        GestureDetector(
-                          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RecordedClassesScreen())),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                            decoration: BoxDecoration(
-                              gradient: const LinearGradient(
-                                colors: [Color(0xFF10B981), Color(0xFF059669)],
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                              ),
-                              borderRadius: BorderRadius.circular(30),
-                              border: Border.all(color: const Color(0xFF047857).withOpacity(0.3), width: 1.5),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: const Color(0xFF047857).withOpacity(0.2),
-                                  offset: const Offset(0, 3),
-                                  blurRadius: 0,
-                                )
-                              ],
-                            ),
-                            child: Text(
-                              'Play',
-                              style: GoogleFonts.fredoka(
-                                fontSize: 12, 
-                                color: Colors.white, 
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        )
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 26),
-
-                // 7. DOUBT CLEARING SESSIONS SECTION
+                // 6. DOUBT CLEARING SESSIONS SECTION
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20.0),
                   child: Row(

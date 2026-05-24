@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -7,6 +8,7 @@ import 'arcade_screen.dart';
 import 'focus_screen.dart';
 import 'parent_screen.dart';
 import 'login_screen.dart';
+import 'profile_screen.dart';
 import '../core/theme.dart';
 import '../core/app_state.dart';
 
@@ -180,74 +182,131 @@ class _AppLayoutState extends State<AppLayout> {
               return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // A. Sleek Gradient Drawer Header
-                Container(
-                  padding: const EdgeInsets.only(top: 60, bottom: 24, left: 24, right: 24),
-                  decoration: const BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [Color(0xFF2563EB), Color(0xFF1D4ED8)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
+                // A. Sleek Gradient Drawer Header (Tapping goes to Profile Screen)
+                GestureDetector(
+                  onTap: () {
+                    Navigator.pop(context); // Close side drawer
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const ProfileScreen()),
+                    );
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.only(top: 60, bottom: 24, left: 24, right: 24),
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [Color(0xFF2563EB), Color(0xFF1D4ED8)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.only(
+                        bottomLeft: Radius.circular(32),
+                        bottomRight: Radius.circular(32),
+                      ),
                     ),
-                    borderRadius: BorderRadius.only(
-                      bottomLeft: Radius.circular(32),
-                      bottomRight: Radius.circular(32),
-                    ),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Container(
-                            width: 54,
-                            height: 54,
-                            decoration: BoxDecoration(
-                              gradient: const LinearGradient(
-                                colors: [Color(0xFFFBBF24), Color(0xFFEA580C)],
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              width: 54,
+                              height: 54,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(color: Colors.white, width: 2),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.08),
+                                    blurRadius: 6,
+                                    offset: const Offset(0, 2),
+                                  )
+                                ],
                               ),
-                              shape: BoxShape.circle,
-                              border: Border.all(color: Colors.white, width: 2),
+                              child: ClipOval(
+                                child: state.profileImagePath.isNotEmpty
+                                    ? Image.file(
+                                        File(state.profileImagePath),
+                                        fit: BoxFit.cover,
+                                        width: 50,
+                                        height: 50,
+                                      )
+                                    : Container(
+                                        decoration: const BoxDecoration(
+                                          gradient: LinearGradient(
+                                            colors: [Color(0xFFFBBF24), Color(0xFFEA580C)],
+                                            begin: Alignment.topLeft,
+                                            end: Alignment.bottomRight,
+                                          ),
+                                        ),
+                                        alignment: Alignment.center,
+                                        child: () {
+                                          String initials = '';
+                                          if (state.studentName.trim().isNotEmpty) {
+                                            List<String> parts = state.studentName.trim().split(' ');
+                                            if (parts.isNotEmpty && parts[0].isNotEmpty) {
+                                              initials += parts[0][0];
+                                            }
+                                            if (parts.length > 1 && parts[1].isNotEmpty) {
+                                              initials += parts[1][0];
+                                            }
+                                          }
+                                          if (initials.isEmpty) initials = 'SL';
+                                          return Text(
+                                            initials.toUpperCase(),
+                                            style: GoogleFonts.fredoka(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+                                          );
+                                        }(),
+                                      ),
+                              ),
                             ),
-                            alignment: Alignment.center,
-                            child: Text(
-                              'AS',
-                              style: GoogleFonts.fredoka(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+                            const Spacer(),
+                            // Streak Counter
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(50),
+                              ),
+                              child: Row(
+                                children: [
+                                  const Text('🔥', style: TextStyle(fontSize: 12)),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '${state.streak}',
+                                    style: GoogleFonts.fredoka(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
+                                  ),
+                                ],
+                              ),
+                            )
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    state.studentName,
+                                    style: GoogleFonts.fredoka(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  Text(
+                                    state.studentEmail,
+                                    style: GoogleFonts.outfit(fontSize: 12, color: Colors.white70, fontWeight: FontWeight.w500),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
+                              ),
                             ),
-                          ),
-                          const Spacer(),
-                          // Streak Counter
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.2),
-                              borderRadius: BorderRadius.circular(50),
-                            ),
-                            child: Row(
-                              children: [
-                                const Text('🔥', style: TextStyle(fontSize: 12)),
-                                const SizedBox(width: 4),
-                                Text(
-                                  '${state.streak}',
-                                  style: GoogleFonts.fredoka(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
-                                ),
-                              ],
-                            ),
-                          )
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'Aarav Sharma',
-                        style: GoogleFonts.fredoka(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
-                      ),
-                      Text(
-                        'aarav.sharma@school.com',
-                        style: GoogleFonts.outfit(fontSize: 12, color: Colors.white70, fontWeight: FontWeight.w500),
-                      ),
-                    ],
+                            const SizedBox(width: 8),
+                            const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white70, size: 14),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
                 ),
                 

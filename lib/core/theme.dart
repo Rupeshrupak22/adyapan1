@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -64,6 +65,14 @@ class AdyapanTheme {
     FontWeight fontWeight = FontWeight.normal,
     Color color = textMain,
   }) {
+    if (Platform.isIOS) {
+      return TextStyle(
+        fontFamily: '.SF Pro Text',
+        fontSize: fontSize,
+        fontWeight: fontWeight,
+        color: color,
+      );
+    }
     return GoogleFonts.fredoka(
       fontSize: fontSize,
       fontWeight: fontWeight,
@@ -77,6 +86,15 @@ class AdyapanTheme {
     Color color = textMain,
     double height = 1.2,
   }) {
+    if (Platform.isIOS) {
+      return TextStyle(
+        fontFamily: '.SF Pro Text',
+        fontSize: fontSize,
+        fontWeight: fontWeight,
+        color: color,
+        height: height,
+      );
+    }
     return GoogleFonts.outfit(
       fontSize: fontSize,
       fontWeight: fontWeight,

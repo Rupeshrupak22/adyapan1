@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -43,7 +44,7 @@ class AdyapanApp extends StatelessWidget {
           background: AdyapanTheme.bgDark,
         ),
         textTheme: Theme.of(context).textTheme.apply(
-          fontFamily: 'Outfit',
+          fontFamily: Platform.isIOS ? '.SF Pro Text' : 'Outfit',
           bodyColor: AdyapanTheme.textMain,
           displayColor: AdyapanTheme.textMain,
         ),

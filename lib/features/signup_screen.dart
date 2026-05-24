@@ -47,6 +47,15 @@ class _SignupScreenState extends State<SignupScreen> {
     if (displayName.isEmpty) {
       displayName = 'Super Learner';
     }
+
+    // Save actual signup inputs into persistent AppState
+    state.updateProfile(
+      name: displayName,
+      email: _emailController.text.trim().isEmpty ? 'aarav.sharma@school.com' : _emailController.text.trim(),
+      phone: _phoneController.text.trim().isEmpty ? '9876543210' : _phoneController.text.trim(),
+      className: _selectedClass,
+      school: _schoolController.text.trim().isEmpty ? 'Adyapan Public School' : _schoolController.text.trim(),
+    );
     
     showDialog(
       context: context,
