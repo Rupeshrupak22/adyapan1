@@ -172,16 +172,25 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
               children: [
                 // Header section
                 Container(
-                  padding: const EdgeInsets.all(20),
+                  padding: const EdgeInsets.only(top: 20, left: 12, right: 20, bottom: 10),
                   child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Subject Roadmaps', style: AdyapanTheme.fredoka(fontSize: 22, fontWeight: FontWeight.bold)),
-                          Text('Path to academic mastery!', style: AdyapanTheme.outfit(fontSize: 12, color: AdyapanTheme.textSub)),
-                        ],
+                      // Side Menu Button to open Drawer
+                      IconButton(
+                        icon: const Icon(Icons.menu_rounded, color: AdyapanTheme.textMain, size: 24),
+                        onPressed: () {
+                          Scaffold.of(context).openDrawer();
+                        },
+                      ),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Subject Roadmaps', style: AdyapanTheme.fredoka(fontSize: 22, fontWeight: FontWeight.bold)),
+                            Text('Path to academic mastery!', style: AdyapanTheme.outfit(fontSize: 12, color: AdyapanTheme.textSub)),
+                          ],
+                        ),
                       ),
                       // Level Indicator
                       Container(

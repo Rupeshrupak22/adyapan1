@@ -450,21 +450,30 @@ class _FocusScreenState extends State<FocusScreen> with SingleTickerProviderStat
               children: [
                 // Header
                 Container(
-                  padding: const EdgeInsets.only(top: 20, left: 20, right: 20),
+                  padding: const EdgeInsets.only(top: 20, left: 12, right: 20),
                   child: Row(
                     children: [
+                      IconButton(
+                        icon: const Icon(Icons.menu_rounded, color: AdyapanTheme.textMain, size: 24),
+                        onPressed: () {
+                          Scaffold.of(context).openDrawer();
+                        },
+                      ),
+                      const SizedBox(width: 4),
                       Container(
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(color: AdyapanTheme.pink.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
                         child: const Icon(Icons.timer_10_rounded, color: AdyapanTheme.pink),
                       ),
                       const SizedBox(width: 12),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Study Focus Room', style: AdyapanTheme.fredoka(fontSize: 20, fontWeight: FontWeight.bold)),
-                          Text('Engage shield to sync and destroy distractions!', style: AdyapanTheme.outfit(fontSize: 12, color: AdyapanTheme.textSub)),
-                        ],
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Study Focus Room', style: AdyapanTheme.fredoka(fontSize: 20, fontWeight: FontWeight.bold)),
+                            Text('Engage shield to sync and destroy distractions!', style: AdyapanTheme.outfit(fontSize: 12, color: AdyapanTheme.textSub)),
+                          ],
+                        ),
                       )
                     ],
                   ),

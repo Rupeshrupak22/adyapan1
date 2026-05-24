@@ -18,6 +18,15 @@ class AppState extends ChangeNotifier {
   int get streak => _streak;
   String get avatar => _avatar;
 
+  // 1b. Reactive Bottom Bar Tab Index
+  int _currentTab = 0;
+  int get currentTab => _currentTab;
+
+  void setTab(int index) {
+    _currentTab = index;
+    notifyListeners();
+  }
+
   // 2. Todos
   List<Map<String, dynamic>> _todos = [];
   List<Map<String, dynamic>> get todos => _todos;

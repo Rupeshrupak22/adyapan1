@@ -3,8 +3,6 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'core/theme.dart';
 import 'core/app_state.dart';
-import 'features/app_layout.dart';
-import 'features/signup_screen.dart';
 import 'features/login_screen.dart';
 
 void main() {
