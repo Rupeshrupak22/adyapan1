@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import '../core/theme.dart';
+import '../core/app_state.dart';
 
 class AttendanceScreen extends StatefulWidget {
   const AttendanceScreen({Key? key}) : super(key: key);
@@ -23,8 +25,26 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     Navigator.pop(context);
   }
 
+  Color _getStatusColor(String status) {
+    if (status == 'Present') return AdyapanTheme.green;
+    if (status == 'Excused') return AdyapanTheme.purple;
+    return Colors.redAccent;
+  }
+
   @override
   Widget build(BuildContext context) {
+    final appState = Provider.of<AppState>(context);
+    final logs = appState.attendanceLogs;
+
+    // Dynamically calculate attendance statistics
+    int presentCount = logs.where((l) => l['status'] == 'Present').length;
+    int excusedCount = logs.where((l) => l['status'] == 'Excused').length;
+    int absentCount = logs.where((l) => l['status'] == 'Absent').length;
+    int totalCount = logs.length;
+    int attendancePercentage = totalCount > 0 
+        ? ((presentCount / totalCount) * 100).round() 
+        : 100;
+
     return Scaffold(
       backgroundColor: const Color(0xFFF1F5F9),
       appBar: AppBar(
@@ -69,8 +89,12 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                 child: Column(
                   children: [
                     Text(
-                      '🔥 Highly Consistent!',
-                      style: GoogleFonts.fredoka(fontSize: 16, fontWeight: FontWeight.bold, color: AdyapanTheme.green),
+                      attendancePercentage >= 85 ? '🔥 Highly Consistent!' : '⚠️ Needs Focus!',
+                      style: GoogleFonts.fredoka(
+                        fontSize: 16, 
+                        fontWeight: FontWeight.bold, 
+                        color: attendancePercentage >= 85 ? AdyapanTheme.green : Colors.orange,
+                      ),
                     ),
                     const SizedBox(height: 16),
                     Container(
@@ -79,22 +103,29 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        border: Border.all(color: AdyapanTheme.green, width: 8),
+                        border: Border.all(
+                          color: attendancePercentage >= 85 ? AdyapanTheme.green : Colors.orange, 
+                          width: 8,
+                        ),
                         boxShadow: [
                           BoxShadow(
-                            color: AdyapanTheme.green.withOpacity(0.2),
+                            color: (attendancePercentage >= 85 ? AdyapanTheme.green : Colors.orange).withOpacity(0.2),
                             blurRadius: 8,
                           )
                         ],
                       ),
                       child: Text(
-                        '94%',
-                        style: GoogleFonts.fredoka(fontSize: 32, fontWeight: FontWeight.bold, color: AdyapanTheme.green),
+                        '$attendancePercentage%',
+                        style: GoogleFonts.fredoka(
+                          fontSize: 32, 
+                          fontWeight: FontWeight.bold, 
+                          color: attendancePercentage >= 85 ? AdyapanTheme.green : Colors.orange,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 16),
                     Text(
-                      'Attended: 118 classes • Excused: 4 leaves • Absent: 3 classes',
+                      'Attended: $presentCount classes • Excused: $excusedCount leaves • Absent: $absentCount classes',
                       style: GoogleFonts.outfit(fontSize: 12, color: AdyapanTheme.textSub, fontWeight: FontWeight.w600),
                       textAlign: TextAlign.center,
                     ),
@@ -109,12 +140,9 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                 style: GoogleFonts.fredoka(fontSize: 16, fontWeight: FontWeight.bold, color: const Color(0xFF1E3A8A)),
               ),
               const SizedBox(height: 10),
-              ...[
-                {'subject': '📐 Mathematics', 'status': 'Present', 'color': AdyapanTheme.green, 'time': '10:30 AM'},
-                {'subject': '⚛️ Science', 'status': 'Present', 'color': AdyapanTheme.green, 'time': '11:45 AM'},
-                {'subject': '📖 English', 'status': 'Present', 'color': AdyapanTheme.green, 'time': '01:30 PM'},
-                {'subject': '🌍 Social Studies', 'status': 'Excused', 'color': AdyapanTheme.purple, 'time': '02:45 PM'},
-              ].map((log) {
+              ...logs.map((log) {
+                final status = log['status'] as String;
+                final color = _getStatusColor(status);
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 10.0),
                   child: Container(
@@ -145,13 +173,13 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                           decoration: BoxDecoration(
-                            color: (log['color'] as Color).withOpacity(0.1),
+                            color: color.withOpacity(0.1),
                             borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: log['color'] as Color),
+                            border: Border.all(color: color),
                           ),
                           child: Text(
-                            log['status'] as String,
-                            style: GoogleFonts.fredoka(fontSize: 10, fontWeight: FontWeight.bold, color: log['color'] as Color),
+                            status,
+                            style: GoogleFonts.fredoka(fontSize: 10, fontWeight: FontWeight.bold, color: color),
                           ),
                         )
                       ],

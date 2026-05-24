@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'core/theme.dart';
 import 'core/app_state.dart';
 import 'features/login_screen.dart';
+import 'features/app_layout.dart';
 
 void main() {
   // Ensure Flutter engine bindings are initialized
@@ -49,7 +50,24 @@ class AdyapanApp extends StatelessWidget {
           displayColor: AdyapanTheme.textMain,
         ),
       ),
-      home: const LoginScreen(),
+      home: Consumer<AppState>(
+        builder: (context, state, child) {
+          if (!state.initialized) {
+            return const Scaffold(
+              backgroundColor: Color(0xFFFFFDF8),
+              body: Center(
+                child: CircularProgressIndicator(
+                  color: Color(0xFF2563EB),
+                ),
+              ),
+            );
+          }
+          if (state.isLoggedIn) {
+            return const AppLayout();
+          }
+          return const LoginScreen();
+        },
+      ),
     );
   }
 }

@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import '../core/theme.dart';
+import '../core/app_state.dart';
 
 class RecordedClassesScreen extends StatefulWidget {
   const RecordedClassesScreen({Key? key}) : super(key: key);
@@ -38,6 +40,22 @@ class _RecordedClassesScreenState extends State<RecordedClassesScreen> {
                   } else {
                     _videoPlayTimer?.cancel();
                     _videoPlayTimer = null;
+                    
+                    // Close the player dialog
+                    Navigator.pop(context);
+                    
+                    // Trigger attendance marking
+                    final subject = _getSubjectFromTopic(videoTitle);
+                    final now = DateTime.now();
+                    final hour = now.hour > 12 ? now.hour - 12 : (now.hour == 0 ? 12 : now.hour);
+                    final ampm = now.hour >= 12 ? 'PM' : 'AM';
+                    final minutesStr = now.minute < 10 ? '0${now.minute}' : '${now.minute}';
+                    final timeStr = '$hour:$minutesStr $ampm';
+                    
+                    Provider.of<AppState>(context, listen: false).markAttendance(subject, 'Present', timeStr);
+                    
+                    // Show celebration dialog
+                    _showCelebrationDialog(videoTitle);
                   }
                 });
               });
@@ -222,6 +240,64 @@ class _RecordedClassesScreenState extends State<RecordedClassesScreen> {
           }
         );
       }
+    );
+  }
+
+  String _getSubjectFromTopic(String title) {
+    if (title.contains('Math')) return '📐 Mathematics';
+    if (title.contains('Science')) return '⚛️ Science';
+    if (title.contains('English')) return '📖 English';
+    if (title.contains('Social')) return '🌍 Social Studies';
+    return '📐 Mathematics';
+  }
+
+  void _showCelebrationDialog(String videoTitle) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: Text(
+          '🎉 Lecture Completed!',
+          style: GoogleFonts.fredoka(fontWeight: FontWeight.bold, color: const Color(0xFF1E3A8A)),
+          textAlign: TextAlign.center,
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('✅', style: TextStyle(fontSize: 64)),
+            const SizedBox(height: 16),
+            Text(
+              'Fantastic job completing the lecture:',
+              style: GoogleFonts.outfit(fontSize: 12),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              videoTitle,
+              style: GoogleFonts.fredoka(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.green),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Your attendance for this recorded session has been auto-marked as Present! 📅',
+              style: GoogleFonts.outfit(fontSize: 11, color: Colors.grey[700]),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Bonus Reward: +30 Focus XP! ⚡',
+              style: GoogleFonts.fredoka(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.blueAccent),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            child: Text('Awesome!', style: GoogleFonts.fredoka(fontWeight: FontWeight.bold)),
+            onPressed: () => Navigator.pop(context),
+          )
+        ],
+      )
     );
   }
 

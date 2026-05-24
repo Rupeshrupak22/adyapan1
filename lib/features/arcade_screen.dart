@@ -60,19 +60,115 @@ class _ArcadeScreenState extends State<ArcadeScreen> with SingleTickerProviderSt
   ];
 
   // Balancer Game State
-  double _leftScaleWeight = 16.0;
-  String? _selectedOperator;
+  int _currentBalancerLevel = 0;
   bool _isBalanced = false;
+  String? _selectedOperator;
+  final List<Map<String, dynamic>> _balancerLevels = [
+    {
+      'left': 16.0,
+      'rightVal1': '8',
+      'rightVal2': '2',
+      'correctOp': '*',
+      'desc': '8 * 2 = 16. Master basic multiplication!',
+    },
+    {
+      'left': 12.0,
+      'rightVal1': '15',
+      'rightVal2': '3',
+      'correctOp': '-',
+      'desc': '15 - 3 = 12. Basic subtraction balancer.',
+    },
+    {
+      'left': 25.0,
+      'rightVal1': '5',
+      'rightVal2': '5',
+      'correctOp': '*',
+      'desc': '5 * 5 = 25. Perfect square multiplier.',
+    },
+    {
+      'left': 9.0,
+      'rightVal1': '27',
+      'rightVal2': '3',
+      'correctOp': '/',
+      'desc': '27 / 3 = 9. Division principles.',
+    },
+    {
+      'left': 30.0,
+      'rightVal1': '18',
+      'rightVal2': '12',
+      'correctOp': '+',
+      'desc': '18 + 12 = 30. Addition balance scale.',
+    },
+  ];
 
   // Syntax Blocks State
+  int _currentSyntaxLevel = 0;
+  bool _syntaxLevelCompleted = false;
   List<String> _assembledSyntax = [];
-  final List<String> _availableSyntaxTiles = ['print', '("Hello World")', ';', 'def main():'];
-  final List<String> _correctSyntaxOrder = ['def main():', 'print', '("Hello World")', ';'];
+  final List<Map<String, dynamic>> _syntaxLevels = [
+    {
+      'desc': 'Assemble Python code to print "Hello World":',
+      'tiles': ['print', '("Hello World")', ';', 'def main():'],
+      'correct': ['def main():', 'print', '("Hello World")', ';'],
+    },
+    {
+      'desc': 'Create an If statement checking if score > 50:',
+      'tiles': ['if score > 50:', 'print("Pass")', 'else:', 'print("Fail")'],
+      'correct': ['if score > 50:', 'print("Pass")', 'else:', 'print("Fail")'],
+    },
+    {
+      'desc': 'Define a function square(x) returning x * x:',
+      'tiles': ['def square(x):', 'return', 'x * x', 'result = square(5)'],
+      'correct': ['def square(x):', 'return', 'x * x', 'result = square(5)'],
+    },
+    {
+      'desc': 'Assemble a For loop iterating 5 times:',
+      'tiles': ['for i in range(5):', 'print(i)', 'x = 0', 'x += i'],
+      'correct': ['x = 0', 'for i in range(5):', 'print(i)', 'x += i'],
+    },
+  ];
+
+  // Word Unscramble State
+  int _currentUnscrambleLevel = 0;
+  List<int> _tappedLetterIndices = [];
+  bool _unscrambleCompleted = false;
+  final List<Map<String, dynamic>> _unscrambleLevels = [
+    {
+      'word': 'ATOM',
+      'scrambled': ['O', 'T', 'M', 'A'],
+      'category': '⚛️ Science',
+      'hint': 'The basic building block of all matter.',
+    },
+    {
+      'word': 'ALGEBRA',
+      'scrambled': ['G', 'E', 'R', 'B', 'L', 'A', 'A'],
+      'category': '📐 Math',
+      'hint': 'The branch of mathematics involving variables.',
+    },
+    {
+      'word': 'GRAVITY',
+      'scrambled': ['V', 'I', 'R', 'T', 'G', 'Y', 'A'],
+      'category': '🌌 Physics',
+      'hint': 'The invisible force that pulls objects toward each other.',
+    },
+    {
+      'word': 'PHOTOSYNTHESIS',
+      'scrambled': ['S', 'Y', 'N', 'T', 'H', 'E', 'S', 'I', 'S', 'P', 'H', 'O', 'T', 'O'],
+      'category': '🌿 Biology',
+      'hint': 'Process by which green plants make food using sunlight.',
+    },
+    {
+      'word': 'METAPHOR',
+      'scrambled': ['P', 'H', 'O', 'T', 'M', 'E', 'A', 'R'],
+      'category': '📖 English',
+      'hint': 'A figure of speech comparing two unrelated things.',
+    },
+  ];
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
     _confettiController = ConfettiController(duration: const Duration(seconds: 2));
   }
 
@@ -445,13 +541,33 @@ class _ArcadeScreenState extends State<ArcadeScreen> with SingleTickerProviderSt
 
   // EQUATION BALANCER SUB-WIDGET
   Widget _buildEquationBalancer() {
+    final level = _balancerLevels[_currentBalancerLevel];
+    double leftWeight = level['left'];
+    String val1 = level['rightVal1'];
+    String val2 = level['rightVal2'];
+    String correctOp = level['correctOp'];
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Text(
-          'Balance the Equation Scale!',
-          style: AdyapanTheme.fredoka(fontSize: 16, fontWeight: FontWeight.bold),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Balance the Equation Scale!',
+              style: AdyapanTheme.fredoka(fontSize: 15, fontWeight: FontWeight.bold),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(color: AdyapanTheme.green.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
+              child: Text(
+                'Level ${_currentBalancerLevel + 1}/${_balancerLevels.length}',
+                style: AdyapanTheme.fredoka(fontSize: 11, fontWeight: FontWeight.bold, color: AdyapanTheme.green),
+              ),
+            ),
+          ],
         ),
+        const SizedBox(height: 4),
         Text(
           'Insert the operator so left weight equals right equation.',
           style: AdyapanTheme.outfit(fontSize: 12, color: AdyapanTheme.textSub),
@@ -459,11 +575,23 @@ class _ArcadeScreenState extends State<ArcadeScreen> with SingleTickerProviderSt
         ),
         const SizedBox(height: 24),
 
+        // Hint Description
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(color: Colors.amber.withOpacity(0.1), borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.amber.withOpacity(0.3))),
+          child: Text(
+            level['desc'],
+            style: AdyapanTheme.outfit(fontSize: 11, color: const Color(0xFFEF6C00), fontWeight: FontWeight.w600),
+            textAlign: TextAlign.center,
+          ),
+        ),
+        const SizedBox(height: 20),
+
         // The Scale Visualization
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Left Plate (Weight 16)
+            // Left Plate
             AnimatedContainer(
               duration: const Duration(milliseconds: 500),
               transform: Matrix4.translationValues(0, _isBalanced ? 0 : -15, 0),
@@ -473,7 +601,7 @@ class _ArcadeScreenState extends State<ArcadeScreen> with SingleTickerProviderSt
                 children: [
                   const Text('⚖️', style: TextStyle(fontSize: 32)),
                   const SizedBox(height: 8),
-                  Text('Weight: ${_leftScaleWeight.toInt()}', style: AdyapanTheme.fredoka(fontSize: 13, fontWeight: FontWeight.bold)),
+                  Text('Weight: ${leftWeight.toInt()}', style: AdyapanTheme.fredoka(fontSize: 13, fontWeight: FontWeight.bold)),
                 ],
               ),
             ),
@@ -494,7 +622,7 @@ class _ArcadeScreenState extends State<ArcadeScreen> with SingleTickerProviderSt
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(color: AdyapanTheme.bgLightDark, borderRadius: BorderRadius.circular(8)),
-                    child: Text('8', style: AdyapanTheme.fredoka(fontWeight: FontWeight.bold)),
+                    child: Text(val1, style: AdyapanTheme.fredoka(fontWeight: FontWeight.bold)),
                   ),
                   const SizedBox(width: 8),
                   // Drop Target Slot
@@ -502,7 +630,7 @@ class _ArcadeScreenState extends State<ArcadeScreen> with SingleTickerProviderSt
                     onAccept: (data) {
                       setState(() {
                         _selectedOperator = data;
-                        if (data == '*') {
+                        if (data == correctOp) {
                           _isBalanced = true;
                           _triggerWin();
                         } else {
@@ -534,7 +662,7 @@ class _ArcadeScreenState extends State<ArcadeScreen> with SingleTickerProviderSt
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(color: AdyapanTheme.bgLightDark, borderRadius: BorderRadius.circular(8)),
-                    child: Text('2', style: AdyapanTheme.fredoka(fontWeight: FontWeight.bold)),
+                    child: Text(val2, style: AdyapanTheme.fredoka(fontWeight: FontWeight.bold)),
                   ),
                 ],
               ),
@@ -600,30 +728,56 @@ class _ArcadeScreenState extends State<ArcadeScreen> with SingleTickerProviderSt
               setState(() {
                 _isBalanced = false;
                 _selectedOperator = null;
+                if (_currentBalancerLevel + 1 < _balancerLevels.length) {
+                  _currentBalancerLevel++;
+                } else {
+                  _currentBalancerLevel = 0; // restart
+                }
               });
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: AdyapanTheme.blueAccent,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(50)),
             ),
-            child: Text('Play Another Level', style: AdyapanTheme.fredoka(color: Colors.white)),
+            child: Text(
+              _currentBalancerLevel + 1 < _balancerLevels.length ? 'Next Level' : 'Restart Balancer',
+              style: AdyapanTheme.fredoka(color: Colors.white, fontWeight: FontWeight.bold),
+            ),
           )
         ]
       ],
     );
   }
 
-  // SYNTAX BLOCKS SUB-WIDGET
+  // SYNTAX BLOCKS SUB-WIDGET (WITH MULTIPLE LEVELS)
   Widget _buildSyntaxBlocks() {
+    final level = _syntaxLevels[_currentSyntaxLevel];
+    final String description = level['desc'] as String;
+    final List<String> tiles = List<String>.from(level['tiles']);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Assemble the Python Code!',
-          style: AdyapanTheme.fredoka(fontSize: 16, fontWeight: FontWeight.bold),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Assemble the Code Blocks!',
+              style: AdyapanTheme.fredoka(fontSize: 15, fontWeight: FontWeight.bold),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(color: AdyapanTheme.purple.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
+              child: Text(
+                'Level ${_currentSyntaxLevel + 1}/${_syntaxLevels.length}',
+                style: AdyapanTheme.fredoka(fontSize: 11, fontWeight: FontWeight.bold, color: AdyapanTheme.purple),
+              ),
+            ),
+          ],
         ),
+        const SizedBox(height: 4),
         Text(
-          'Drag the tiles into the assembly tray to print "Hello World".',
+          description,
           style: AdyapanTheme.outfit(fontSize: 12, color: AdyapanTheme.textSub),
         ),
         const SizedBox(height: 20),
@@ -674,7 +828,7 @@ class _ArcadeScreenState extends State<ArcadeScreen> with SingleTickerProviderSt
         Wrap(
           spacing: 8,
           runSpacing: 8,
-          children: _availableSyntaxTiles.map((tile) {
+          children: tiles.map((tile) {
             bool isUsed = _assembledSyntax.contains(tile);
             return GestureDetector(
               onTap: isUsed ? null : () {
@@ -719,14 +873,15 @@ class _ArcadeScreenState extends State<ArcadeScreen> with SingleTickerProviderSt
             const SizedBox(width: 12),
             Expanded(
               child: ElevatedButton(
-                onPressed: () {
+                onPressed: _assembledSyntax.isEmpty || _syntaxLevelCompleted ? null : () {
                   // Check order
+                  final correctOrder = List<String>.from(level['correct']);
                   bool isCorrect = true;
-                  if (_assembledSyntax.length != _correctSyntaxOrder.length) {
+                  if (_assembledSyntax.length != correctOrder.length) {
                     isCorrect = false;
                   } else {
-                    for (int i = 0; i < _correctSyntaxOrder.length; i++) {
-                      if (_assembledSyntax[i] != _correctSyntaxOrder[i]) {
+                    for (int i = 0; i < correctOrder.length; i++) {
+                      if (_assembledSyntax[i] != correctOrder[i]) {
                         isCorrect = false;
                         break;
                       }
@@ -735,12 +890,15 @@ class _ArcadeScreenState extends State<ArcadeScreen> with SingleTickerProviderSt
 
                   if (isCorrect) {
                     _triggerWin();
+                    setState(() {
+                      _syntaxLevelCompleted = true;
+                    });
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(content: Text('🎉 Awesome Assemble! Code Compiled (+30 XP)'), backgroundColor: AdyapanTheme.green),
                     );
                   } else {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('❌ Compile Error: Syntax syntax mismatch! Try again.'), backgroundColor: AdyapanTheme.pink),
+                      const SnackBar(content: Text('❌ Compile Error: Syntax mismatch! Try again.'), backgroundColor: AdyapanTheme.pink),
                     );
                   }
                 },
@@ -752,7 +910,238 @@ class _ArcadeScreenState extends State<ArcadeScreen> with SingleTickerProviderSt
               ),
             )
           ],
-        )
+        ),
+        if (_syntaxLevelCompleted) ...[
+          const SizedBox(height: 20),
+          Center(
+            child: ElevatedButton(
+              onPressed: () {
+                setState(() {
+                  _assembledSyntax.clear();
+                  _syntaxLevelCompleted = false;
+                  if (_currentSyntaxLevel + 1 < _syntaxLevels.length) {
+                    _currentSyntaxLevel++;
+                  } else {
+                    _currentSyntaxLevel = 0; // restart
+                  }
+                });
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AdyapanTheme.green,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(50)),
+              ),
+              child: Text(
+                _currentSyntaxLevel + 1 < _syntaxLevels.length ? 'Next Level' : 'Restart Syntax Blocks',
+                style: AdyapanTheme.fredoka(color: Colors.white, fontWeight: FontWeight.bold),
+              ),
+            ),
+          )
+        ]
+      ],
+    );
+  }
+
+  // BRAND NEW GAME TAB: WORD UNSCRAMBLE (BRAIN BOOSTER)
+  Widget _buildWordUnscramble() {
+    final level = _unscrambleLevels[_currentUnscrambleLevel];
+    final String targetWord = level['word'];
+    final List<String> scrambled = List<String>.from(level['scrambled']);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text('Word Unscramble 🧠', style: AdyapanTheme.fredoka(fontSize: 16, fontWeight: FontWeight.bold)),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: AdyapanTheme.blueAccent.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: AdyapanTheme.blueAccent),
+              ),
+              child: Text(
+                level['category'] as String,
+                style: AdyapanTheme.fredoka(fontSize: 10, fontWeight: FontWeight.bold, color: AdyapanTheme.blueAccent),
+              ),
+            )
+          ],
+        ),
+        const SizedBox(height: 6),
+        Text('Tap the scrambled letter tiles to assemble the correct term.', style: AdyapanTheme.outfit(fontSize: 12, color: AdyapanTheme.textSub)),
+        const SizedBox(height: 16),
+
+        // Hint Card
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: const Color(0xFFEFF6FF),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFFBFDBFE)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('HINT DEFINITION:', style: GoogleFonts.outfit(fontSize: 9, fontWeight: FontWeight.w900, color: const Color(0xFF1D4ED8), letterSpacing: 1.0)),
+              const SizedBox(height: 4),
+              Text(
+                level['hint'] as String,
+                style: GoogleFonts.fredoka(fontSize: 13, color: const Color(0xFF1E3A8A)),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 20),
+
+        // Letter Assembly Tray
+        Container(
+          width: double.infinity,
+          constraints: const BoxConstraints(minHeight: 80),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: AdyapanTheme.bgLightDark,
+            border: Border.all(color: AdyapanTheme.glassBorder, width: 2),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: _tappedLetterIndices.isEmpty
+              ? Center(child: Text('Tap letters below to spell!', style: AdyapanTheme.outfit(fontSize: 11, color: AdyapanTheme.textMuted)))
+              : Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: _tappedLetterIndices.map((idx) {
+                    return GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _tappedLetterIndices.remove(idx);
+                        });
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(colors: [Color(0xFF8B5CF6), Color(0xFF7C3AED)]),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          scrambled[idx],
+                          style: GoogleFonts.fredoka(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+        ),
+        const SizedBox(height: 20),
+
+        // Available scrambled letter buttons
+        Text('Scrambled Letter Blocks:', style: AdyapanTheme.outfit(fontSize: 13, color: AdyapanTheme.textSub, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: List.generate(scrambled.length, (idx) {
+            bool isUsed = _tappedLetterIndices.contains(idx);
+            return GestureDetector(
+              onTap: isUsed ? null : () {
+                setState(() {
+                  _tappedLetterIndices.add(idx);
+                });
+              },
+              child: Opacity(
+                opacity: isUsed ? 0.3 : 1.0,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    border: Border.all(color: AdyapanTheme.glassBorder),
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 2, offset: Offset(0, 1))],
+                  ),
+                  child: Text(
+                    scrambled[idx],
+                    style: GoogleFonts.fredoka(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+            );
+          }),
+        ),
+        const SizedBox(height: 24),
+
+        Row(
+          children: [
+            Expanded(
+              child: ElevatedButton(
+                onPressed: _tappedLetterIndices.isEmpty ? null : () {
+                  setState(() {
+                    _tappedLetterIndices.clear();
+                  });
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.white,
+                  surfaceTintColor: Colors.transparent,
+                  side: const BorderSide(color: AdyapanTheme.glassBorder),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(50)),
+                ),
+                child: Text('Reset', style: AdyapanTheme.fredoka(color: AdyapanTheme.textSub)),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: ElevatedButton(
+                onPressed: _tappedLetterIndices.isEmpty || _unscrambleCompleted ? null : () {
+                  // Validate word
+                  final assembledWord = _tappedLetterIndices.map((idx) => scrambled[idx]).join('').trim().toUpperCase();
+                  if (assembledWord == targetWord) {
+                    _triggerWin();
+                    setState(() {
+                      _unscrambleCompleted = true;
+                    });
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('🎉 Outstanding! You unscrambled "$targetWord" successfully! (+30 XP)'), backgroundColor: AdyapanTheme.green),
+                    );
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('❌ Mismatch! "$assembledWord" is incorrect. Try again!'), backgroundColor: AdyapanTheme.pink),
+                    );
+                  }
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AdyapanTheme.blueAccent,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(50)),
+                ),
+                child: Text('Check Word', style: AdyapanTheme.fredoka(color: Colors.white, fontWeight: FontWeight.bold)),
+              ),
+            )
+          ],
+        ),
+        if (_unscrambleCompleted) ...[
+          const SizedBox(height: 20),
+          Center(
+            child: ElevatedButton(
+              onPressed: () {
+                setState(() {
+                  _tappedLetterIndices.clear();
+                  _unscrambleCompleted = false;
+                  if (_currentUnscrambleLevel + 1 < _unscrambleLevels.length) {
+                    _currentUnscrambleLevel++;
+                  } else {
+                    _currentUnscrambleLevel = 0; // restart
+                  }
+                });
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AdyapanTheme.green,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(50)),
+              ),
+              child: Text(
+                _currentUnscrambleLevel + 1 < _unscrambleLevels.length ? 'Next Level' : 'Restart Brain Booster',
+                style: AdyapanTheme.fredoka(color: Colors.white, fontWeight: FontWeight.bold),
+              ),
+            ),
+          )
+        ]
       ],
     );
   }
@@ -810,12 +1199,13 @@ class _ArcadeScreenState extends State<ArcadeScreen> with SingleTickerProviderSt
                     indicatorSize: TabBarIndicatorSize.tab,
                     labelColor: Colors.white,
                     unselectedLabelColor: AdyapanTheme.textSub,
-                    labelStyle: AdyapanTheme.fredoka(fontSize: 12, fontWeight: FontWeight.bold),
+                    labelStyle: AdyapanTheme.fredoka(fontSize: 11, fontWeight: FontWeight.bold),
                     dividerColor: Colors.transparent,
                     tabs: const [
                       Tab(text: 'Quiz Arena'),
                       Tab(text: 'Balancer'),
                       Tab(text: 'Syntax Block'),
+                      Tab(text: 'Unscramble'),
                     ],
                   ),
                 ),
@@ -828,6 +1218,7 @@ class _ArcadeScreenState extends State<ArcadeScreen> with SingleTickerProviderSt
                       SingleChildScrollView(padding: const EdgeInsets.all(20), child: _buildQuizArena()),
                       SingleChildScrollView(padding: const EdgeInsets.all(20), child: _buildEquationBalancer()),
                       SingleChildScrollView(padding: const EdgeInsets.all(20), child: _buildSyntaxBlocks()),
+                      SingleChildScrollView(padding: const EdgeInsets.all(20), child: _buildWordUnscramble()),
                     ],
                   ),
                 )

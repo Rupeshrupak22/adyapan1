@@ -78,6 +78,51 @@ class AppState extends ChangeNotifier {
   bool get parentQuestCompleted => _parentQuestCompleted;
   double get screenLimit => _screenLimit;
 
+  // 5b. Auth Database & Session
+  bool _isLoggedIn = false;
+  bool get isLoggedIn => _isLoggedIn;
+
+  Map<String, String> _userCredentials = {};
+  Map<String, String> get userCredentials => _userCredentials;
+
+  // 6. Attendance Logs
+  List<Map<String, dynamic>> _attendanceLogs = [];
+  List<Map<String, dynamic>> get attendanceLogs => _attendanceLogs;
+
+  // 7. Completed Quizzes Progress & Syllabus Getters
+  int _completedQuizzesCount = 4;
+  int get completedQuizzesCount => _completedQuizzesCount;
+
+  double get mathSyllabusProgress {
+    final list = _roadmaps['Math'];
+    if (list == null || list.isEmpty) return 50.0;
+    int completed = list.where((node) => node['status'] == 'completed').length;
+    return (((completed + (_completedQuizzesCount >= 2 ? 2 : 1)) / (list.length + 2)) * 100.0).clamp(0.0, 100.0);
+  }
+
+  double get scienceSyllabusProgress {
+    final list = _roadmaps['Science'];
+    if (list == null || list.isEmpty) return 40.0;
+    int completed = list.where((node) => node['status'] == 'completed').length;
+    return (((completed + (_completedQuizzesCount >= 4 ? 2 : 1)) / (list.length + 2)) * 100.0).clamp(0.0, 100.0);
+  }
+
+  double get englishSyllabusProgress {
+    return ((_completedQuizzesCount * 12.0) + 20.0).clamp(0.0, 100.0);
+  }
+
+  double get overallSyllabusProgress {
+    return (mathSyllabusProgress + scienceSyllabusProgress + englishSyllabusProgress) / 3.0;
+  }
+
+  void incrementCompletedQuizzes() {
+    _completedQuizzesCount++;
+    _prefs.setInt('completed_quizzes_count', _completedQuizzesCount);
+    addXp(25); // Reward 25 XP for completing a quiz/game level!
+    notifyListeners();
+  }
+
+
   AppState() {
     _initPrefs();
   }
@@ -134,10 +179,38 @@ class AppState extends ChangeNotifier {
     _studentClass = _prefs.getString('student_class') ?? 'Class 10';
     _studentSchool = _prefs.getString('student_school') ?? 'Adyapan Public School';
     _profileImagePath = _prefs.getString('profile_image_path') ?? '';
+    _completedQuizzesCount = _prefs.getInt('completed_quizzes_count') ?? 4;
+
+    // Load Auth Database & Session
+    _isLoggedIn = _prefs.getBool('is_logged_in') ?? false;
+    final credsJson = _prefs.getString('user_credentials');
+    if (credsJson != null) {
+      _userCredentials = Map<String, String>.from(jsonDecode(credsJson));
+    } else {
+      _userCredentials = {
+        'aarav.sharma@school.com': 'password123',
+      };
+      _saveCredentials();
+    }
+
+    // Load Attendance Logs
+    final attendanceJson = _prefs.getString('attendance_logs');
+    if (attendanceJson != null) {
+      _attendanceLogs = List<Map<String, dynamic>>.from(jsonDecode(attendanceJson));
+    } else {
+      _attendanceLogs = [
+        {'subject': '📐 Mathematics', 'status': 'Present', 'time': '10:30 AM'},
+        {'subject': '⚛️ Science', 'status': 'Present', 'time': '11:45 AM'},
+        {'subject': '📖 English', 'status': 'Present', 'time': '01:30 PM'},
+        {'subject': '🌍 Social Studies', 'status': 'Excused', 'time': '02:45 PM'},
+      ];
+      _saveAttendance();
+    }
 
     _initialized = true;
     notifyListeners();
   }
+
 
   // XP & Leveling Logic
   void addXp(int amount) {
@@ -278,4 +351,71 @@ class AppState extends ChangeNotifier {
     _prefs.setString('profile_image_path', path);
     notifyListeners();
   }
+
+  // Session & Auth Registry helpers
+  void _saveCredentials() {
+    _prefs.setString('user_credentials', jsonEncode(_userCredentials));
+  }
+
+  void login() {
+    _isLoggedIn = true;
+    _prefs.setBool('is_logged_in', true);
+    notifyListeners();
+  }
+
+  void logout() {
+    _isLoggedIn = false;
+    _prefs.setBool('is_logged_in', false);
+    notifyListeners();
+  }
+
+  bool registerUser({
+    required String email,
+    required String password,
+    required String name,
+    required String phone,
+    required String className,
+    required String school,
+  }) {
+    final lowerEmail = email.trim().toLowerCase();
+    if (_userCredentials.containsKey(lowerEmail)) {
+      return false; // Email already registered!
+    }
+
+    _userCredentials[lowerEmail] = password;
+    _saveCredentials();
+
+    updateProfile(
+      name: name,
+      email: email,
+      phone: phone,
+      className: className,
+      school: school,
+    );
+
+    return true;
+  }
+
+  // Attendance Persistence helpers
+  void _saveAttendance() {
+    _prefs.setString('attendance_logs', jsonEncode(_attendanceLogs));
+  }
+
+  void markAttendance(String subject, String status, String time) {
+    final index = _attendanceLogs.indexWhere((log) => log['subject'].trim().toLowerCase() == subject.trim().toLowerCase());
+    if (index != -1) {
+      _attendanceLogs[index]['status'] = status;
+      _attendanceLogs[index]['time'] = time;
+    } else {
+      _attendanceLogs.add({
+        'subject': subject,
+        'status': status,
+        'time': time,
+      });
+    }
+    _saveAttendance();
+    addXp(30); // Reward 30 Focus XP!
+    notifyListeners();
+  }
 }
+

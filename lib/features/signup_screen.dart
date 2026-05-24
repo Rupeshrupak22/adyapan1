@@ -5,7 +5,6 @@ import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../core/theme.dart';
 import '../core/app_state.dart';
-import 'app_layout.dart';
 import 'login_screen.dart';
 
 class SignupScreen extends StatefulWidget {
@@ -43,22 +42,74 @@ class _SignupScreenState extends State<SignupScreen> {
 
   void _handleSignup() {
     final state = Provider.of<AppState>(context, listen: false);
-    state.addXp(50);
     
-    String displayName = _nameController.text.trim();
-    if (displayName.isEmpty) {
-      displayName = 'Super Learner';
+    final name = _nameController.text.trim();
+    final phone = _phoneController.text.trim();
+    final email = _emailController.text.trim();
+    final school = _schoolController.text.trim();
+    final password = _passwordController.text;
+    final confirmPassword = _confirmPasswordController.text;
+
+    if (name.isEmpty || phone.isEmpty || email.isEmpty || school.isEmpty || password.isEmpty || confirmPassword.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('⚠️ All fields are required! Please fill in everything.', style: AdyapanTheme.outfit(fontWeight: FontWeight.bold, color: Colors.white)),
+          backgroundColor: Colors.orange[800],
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        )
+      );
+      return;
     }
 
-    // Save actual signup inputs into persistent AppState
-    state.updateProfile(
-      name: displayName,
-      email: _emailController.text.trim().isEmpty ? 'aarav.sharma@school.com' : _emailController.text.trim(),
-      phone: _phoneController.text.trim().isEmpty ? '9876543210' : _phoneController.text.trim(),
+    if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(email)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('⚠️ Please enter a valid email address.', style: AdyapanTheme.outfit(fontWeight: FontWeight.bold, color: Colors.white)),
+          backgroundColor: Colors.orange[800],
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        )
+      );
+      return;
+    }
+
+    if (password != confirmPassword) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('⚠️ Passwords do not match!', style: AdyapanTheme.outfit(fontWeight: FontWeight.bold, color: Colors.white)),
+          backgroundColor: Colors.redAccent,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        )
+      );
+      return;
+    }
+
+    // Call state registration
+    final success = state.registerUser(
+      email: email,
+      password: password,
+      name: name,
+      phone: phone,
       className: _selectedClass,
-      school: _schoolController.text.trim().isEmpty ? 'Adyapan Public School' : _schoolController.text.trim(),
+      school: school,
     );
-    
+
+    if (!success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('⚠️ This email is already registered! Please log in.', style: AdyapanTheme.outfit(fontWeight: FontWeight.bold, color: Colors.white)),
+          backgroundColor: Colors.redAccent,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        )
+      );
+      return;
+    }
+
+    state.addXp(50); // Reward signup XP!
+
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -71,7 +122,7 @@ class _SignupScreenState extends State<SignupScreen> {
           textAlign: TextAlign.center,
          ),
         content: Text(
-          'Welcome $displayName! Your student profile has been created and you have unlocked the learning dashboard.',
+          'Welcome $name! Your student profile has been created successfully. Please login to unlock the learning dashboard.',
           style: AdyapanTheme.outfit(fontSize: 14, color: AdyapanTheme.textSub),
           textAlign: TextAlign.center,
         ),
@@ -81,7 +132,7 @@ class _SignupScreenState extends State<SignupScreen> {
               Navigator.pop(context); // close dialog
               Navigator.pushReplacement(
                 context,
-                MaterialPageRoute(builder: (_) => const AppLayout()),
+                MaterialPageRoute(builder: (_) => const LoginScreen()),
               );
             },
             style: ElevatedButton.styleFrom(
@@ -90,7 +141,7 @@ class _SignupScreenState extends State<SignupScreen> {
               minimumSize: const Size(double.infinity, 44),
             ),
             child: Text(
-              'Unlock Dashboard',
+              'Proceed to Login',
               style: AdyapanTheme.fredoka(color: Colors.white, fontWeight: FontWeight.bold),
             ),
           )
@@ -107,7 +158,7 @@ class _SignupScreenState extends State<SignupScreen> {
     double cardContentSpacing = screenHeight < 700 ? 6 : 8; 
 
     return Scaffold(
-      resizeToAvoidBottomInset: true, // Automatically resizes view when keyboard opens
+      resizeToAvoidBottomInset: false, // Automatically keeps background desk decorations static when keyboard opens!
       body: Stack(
         children: [
           // 1. DYNAMIC PASTEL BACKGROUND GRADIENT

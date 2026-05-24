@@ -1,6 +1,9 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import '../core/theme.dart';
+import '../core/app_state.dart';
 
 class LiveClassesScreen extends StatefulWidget {
   const LiveClassesScreen({Key? key}) : super(key: key);
@@ -13,11 +16,32 @@ class _LiveClassesScreenState extends State<LiveClassesScreen> {
   void _joinLiveSimulate(String teacherName, String topicName) {
     showDialog(
       context: context,
+      barrierDismissible: false,
       builder: (context) {
         bool isMuted = false;
         bool isVideoOff = false;
+        int watchedMinutes = 110; // Start at 1 hour 50 minutes for fast simulation
+        Timer? simulationTimer;
+
         return StatefulBuilder(
           builder: (context, setVideoState) {
+            // Live ticker to simulate minutes watched (increments every 800ms)
+            if (simulationTimer == null) {
+              simulationTimer = Timer.periodic(const Duration(milliseconds: 800), (timer) {
+                if (!mounted) {
+                  timer.cancel();
+                  return;
+                }
+                setVideoState(() {
+                  if (watchedMinutes < 120) {
+                    watchedMinutes++;
+                  } else {
+                    timer.cancel();
+                  }
+                });
+              });
+            }
+
             return AlertDialog(
               backgroundColor: Colors.black87,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
@@ -40,7 +64,11 @@ class _LiveClassesScreenState extends State<LiveClassesScreen> {
                       ),
                       IconButton(
                         icon: const Icon(Icons.close, color: Colors.white70, size: 20),
-                        onPressed: () => Navigator.pop(context),
+                        onPressed: () {
+                          simulationTimer?.cancel();
+                          Navigator.pop(context);
+                          _processLiveAttendance(topicName, watchedMinutes);
+                        },
                       )
                     ],
                   ),
@@ -97,6 +125,70 @@ class _LiveClassesScreenState extends State<LiveClassesScreen> {
                       ],
                     ),
                   ),
+                  const SizedBox(height: 12),
+                  // Stays/Watched dynamic criteria panel
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.white10,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.white24),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Watched: ${watchedMinutes ~/ 60}h ${watchedMinutes % 60}m',
+                              style: GoogleFonts.outfit(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                            ),
+                            Text(
+                              'Total: 2h 00m (120m)',
+                              style: GoogleFonts.outfit(color: Colors.white70, fontSize: 10),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(4),
+                          child: LinearProgressIndicator(
+                            value: watchedMinutes / 120,
+                            backgroundColor: Colors.white24,
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              watchedMinutes >= 115 ? Colors.greenAccent : Colors.amberAccent,
+                            ),
+                            minHeight: 6,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            Icon(
+                              watchedMinutes >= 115 ? Icons.check_circle : Icons.info_outline,
+                              color: watchedMinutes >= 115 ? Colors.greenAccent : Colors.amberAccent,
+                              size: 14,
+                            ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                watchedMinutes >= 115
+                                    ? '✅ Attendance secured! Leave stream to mark Present.'
+                                    : '⏳ Attendance lock: 1h 55m required. Stays: ${115 - watchedMinutes}m left.',
+                                style: GoogleFonts.outfit(
+                                  color: watchedMinutes >= 115 ? Colors.greenAccent : Colors.amberAccent,
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+
                   const SizedBox(height: 16),
                   // Control Buttons Bar
                   Row(
@@ -133,7 +225,11 @@ class _LiveClassesScreenState extends State<LiveClassesScreen> {
                         radius: 22,
                         child: IconButton(
                           icon: const Icon(Icons.call_end, color: Colors.white),
-                          onPressed: () => Navigator.pop(context),
+                          onPressed: () {
+                            simulationTimer?.cancel();
+                            Navigator.pop(context);
+                            _processLiveAttendance(topicName, watchedMinutes);
+                          },
                         ),
                       ),
                     ],
@@ -145,6 +241,86 @@ class _LiveClassesScreenState extends State<LiveClassesScreen> {
         );
       }
     );
+  }
+
+  String _getSubjectFromTopic(String title) {
+    if (title.contains('BODMAS') || title.contains('Math')) return '📐 Mathematics';
+    if (title.contains('Atomic') || title.contains('Science')) return '⚛️ Science';
+    if (title.contains('Grammar') || title.contains('English')) return '📖 English';
+    return '📐 Mathematics';
+  }
+
+  void _processLiveAttendance(String topicName, int watchedMinutes) {
+    final subject = _getSubjectFromTopic(topicName);
+    if (watchedMinutes >= 115) {
+      final now = DateTime.now();
+      final hour = now.hour > 12 ? now.hour - 12 : (now.hour == 0 ? 12 : now.hour);
+      final ampm = now.hour >= 12 ? 'PM' : 'AM';
+      final minutesStr = now.minute < 10 ? '0${now.minute}' : '${now.minute}';
+      final timeStr = '$hour:$minutesStr $ampm';
+
+      Provider.of<AppState>(context, listen: false).markAttendance(subject, 'Present', timeStr);
+
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          title: Text(
+            '🎉 Live Attendance Secured!',
+            style: GoogleFonts.fredoka(fontWeight: FontWeight.bold, color: const Color(0xFF1E3A8A)),
+            textAlign: TextAlign.center,
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('👩‍🏫', style: TextStyle(fontSize: 64)),
+              const SizedBox(height: 16),
+              Text(
+                'Attendance secured for Live Class:',
+                style: GoogleFonts.outfit(fontSize: 12),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 6),
+              Text(
+                topicName,
+                style: GoogleFonts.fredoka(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.green),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Congratulations! You stayed for ${watchedMinutes ~/ 60}h ${watchedMinutes % 60}m (> 1h 55m limit). Attendance successfully marked in portal.',
+                style: GoogleFonts.outfit(fontSize: 11, color: Colors.grey[700]),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Bonus Reward: +30 Focus XP! ⚡',
+                style: GoogleFonts.fredoka(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.blueAccent),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              child: Text('Awesome!', style: GoogleFonts.fredoka(fontWeight: FontWeight.bold)),
+              onPressed: () => Navigator.pop(context),
+            )
+          ],
+        )
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '⚠️ Attendance Locked: You only stayed for ${watchedMinutes ~/ 60}h ${watchedMinutes % 60}m. Stays must exceed 1 hour 55 minutes (115 mins) for attendance!',
+            style: GoogleFonts.fredoka(fontSize: 11, color: Colors.white),
+          ),
+          backgroundColor: Colors.redAccent,
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 4),
+        )
+      );
+    }
   }
 
   Widget _buildLiveTile(String topicName, String time, String teacher, String icon, {bool isLive = false}) {

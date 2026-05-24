@@ -463,24 +463,6 @@ class _AppLayoutState extends State<AppLayout> {
                               ),
                             ),
                             const Spacer(),
-                            // Streak Counter
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.2),
-                                borderRadius: BorderRadius.circular(50),
-                              ),
-                              child: Row(
-                                children: [
-                                  const Text('🔥', style: TextStyle(fontSize: 12)),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    '${state.streak}',
-                                    style: GoogleFonts.fredoka(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
-                                  ),
-                                ],
-                              ),
-                            )
                           ],
                         ),
                         const SizedBox(height: 16),
@@ -625,7 +607,8 @@ class _AppLayoutState extends State<AppLayout> {
                       const SizedBox(width: 12),
                       GestureDetector(
                         onTap: () {
-                          Navigator.pop(context);
+                          Navigator.pop(context); // close drawer
+                          Provider.of<AppState>(context, listen: false).logout();
                           Navigator.pushReplacement(
                             context,
                             MaterialPageRoute(builder: (_) => const LoginScreen()),

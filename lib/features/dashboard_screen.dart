@@ -11,8 +11,15 @@ import 'live_classes_screen.dart';
 import 'recorded_classes_screen.dart';
 import 'doubt_solver_screen.dart';
 
-class DashboardScreen extends StatelessWidget {
+class DashboardScreen extends StatefulWidget {
   const DashboardScreen({Key? key}) : super(key: key);
+
+  @override
+  State<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends State<DashboardScreen> {
+  int _selectedLeaderboardTab = 0;
 
   String _getDynamicGreeting() {
     final hour = DateTime.now().hour;
@@ -35,10 +42,7 @@ class DashboardScreen extends StatelessWidget {
         const SnackBar(content: Text('🎮 Entering Quiz and Game Arcade Arena!'), backgroundColor: AdyapanTheme.blueAccent, duration: Duration(seconds: 1)),
       );
     } else if (cardTitle == 'Progress') {
-      state.setTab(1); // Switch to Roadmaps Tab!
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('📈 Loading academic progress roadmaps!'), backgroundColor: AdyapanTheme.blueAccent, duration: Duration(seconds: 1)),
-      );
+      _showProgressDialog(context, state);
     } else if (cardTitle == 'Attendance') {
       Navigator.push(context, MaterialPageRoute(builder: (_) => const AttendanceScreen()));
     } else if (cardTitle == 'Homework') {
@@ -51,7 +55,376 @@ class DashboardScreen extends StatelessWidget {
       Navigator.push(context, MaterialPageRoute(builder: (_) => const RecordedClassesScreen()));
     } else if (cardTitle == 'Doubt Sessions') {
       Navigator.push(context, MaterialPageRoute(builder: (_) => const DoubtSolverScreen()));
+    } else if (cardTitle == 'Leaderboard') {
+      _showLeaderboardDialog(context, state);
     }
+  }
+
+  // 0. Progress & Quiz Overview Dialog
+  void _showProgressDialog(BuildContext context, AppState state) {
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          final mathPct = state.mathSyllabusProgress;
+          final sciPct = state.scienceSyllabusProgress;
+          final engPct = state.englishSyllabusProgress;
+          final overallPct = state.overallSyllabusProgress;
+          final quizDone = state.completedQuizzesCount;
+          final xp = state.xp;
+          final level = state.level;
+
+          return AlertDialog(
+            backgroundColor: Colors.white,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+            titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+            contentPadding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            title: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF2563EB), Color(0xFF4F46E5)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.trending_up_rounded, color: Colors.white, size: 18),
+                ),
+                const SizedBox(width: 10),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Academic Progress',
+                      style: GoogleFonts.fredoka(fontSize: 17, fontWeight: FontWeight.bold, color: const Color(0xFF1E3A8A)),
+                    ),
+                    Text(
+                      'Your learning journey overview',
+                      style: GoogleFonts.outfit(fontSize: 10, color: AdyapanTheme.textMuted, fontWeight: FontWeight.w500),
+                    ),
+                  ],
+                ),
+                const Spacer(),
+                GestureDetector(
+                  onTap: () => Navigator.pop(context),
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: const BoxDecoration(color: Color(0xFFF1F5F9), shape: BoxShape.circle),
+                    child: const Icon(Icons.close, size: 16, color: Color(0xFF64748B)),
+                  ),
+                ),
+              ],
+            ),
+            content: SizedBox(
+              width: double.maxFinite,
+              child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: 14),
+
+                    // === OVERALL PROGRESS RING SUMMARY ===
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFFEFF6FF), Color(0xFFE0E7FF)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: const Color(0xFFBFDBFE), width: 1.2),
+                      ),
+                      child: Row(
+                        children: [
+                          // Ring indicator
+                          Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              SizedBox(
+                                width: 64,
+                                height: 64,
+                                child: CircularProgressIndicator(
+                                  value: overallPct / 100,
+                                  strokeWidth: 7,
+                                  backgroundColor: const Color(0xFFBFDBFE),
+                                  valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF2563EB)),
+                                ),
+                              ),
+                              Text(
+                                '${overallPct.toStringAsFixed(0)}%',
+                                style: GoogleFonts.fredoka(fontSize: 13, fontWeight: FontWeight.bold, color: const Color(0xFF1E3A8A)),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Overall Syllabus',
+                                  style: GoogleFonts.fredoka(fontSize: 13, fontWeight: FontWeight.bold, color: const Color(0xFF1E3A8A)),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  '$quizDone quizzes completed • Level $level',
+                                  style: GoogleFonts.outfit(fontSize: 10, color: AdyapanTheme.textSub, fontWeight: FontWeight.w500),
+                                ),
+                                const SizedBox(height: 6),
+                                // XP bar
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: ClipRRect(
+                                        borderRadius: BorderRadius.circular(6),
+                                        child: LinearProgressIndicator(
+                                          value: (xp % 200) / 200.0,
+                                          minHeight: 6,
+                                          backgroundColor: const Color(0xFFBFDBFE),
+                                          valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF2563EB)),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      '${xp % 200}/200 XP',
+                                      style: GoogleFonts.outfit(fontSize: 9, fontWeight: FontWeight.bold, color: const Color(0xFF2563EB)),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // === QUIZ PROGRESS ===
+                    Text(
+                      '🎮 Quiz & Game Progress',
+                      style: GoogleFonts.fredoka(fontSize: 14, fontWeight: FontWeight.bold, color: AdyapanTheme.textMain),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF5F3FF),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: const Color(0xFF6366F1).withOpacity(0.2)),
+                      ),
+                      child: Column(
+                        children: [
+                          _buildProgressQuizRow('🧮 BODMAS Balancer', quizDone >= 1, quizDone >= 1 ? 'Completed' : 'Not started', const Color(0xFF6366F1)),
+                          const SizedBox(height: 8),
+                          _buildProgressQuizRow('📝 Syntax Blocks', quizDone >= 2, quizDone >= 2 ? 'Completed' : 'Not started', const Color(0xFF6366F1)),
+                          const SizedBox(height: 8),
+                          _buildProgressQuizRow('🔠 Word Unscramble', quizDone >= 3, quizDone >= 3 ? 'Completed' : 'Not started', const Color(0xFF6366F1)),
+                          const SizedBox(height: 8),
+                          _buildProgressQuizRow('⚡ Speed Math', quizDone >= 4, quizDone >= 4 ? 'Completed' : 'Not started', const Color(0xFF6366F1)),
+                          const Divider(height: 16, color: Color(0xFFE9D5FF)),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text('Total Completed', style: GoogleFonts.fredoka(fontSize: 11, fontWeight: FontWeight.bold, color: const Color(0xFF4C1D95))),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF6366F1),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Text('$quizDone / 4 Quizzes', style: GoogleFonts.fredoka(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white)),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // === CLASS / SYLLABUS PROGRESS ===
+                    Text(
+                      '📚 Class Syllabus Progress',
+                      style: GoogleFonts.fredoka(fontSize: 14, fontWeight: FontWeight.bold, color: AdyapanTheme.textMain),
+                    ),
+                    const SizedBox(height: 8),
+                    _buildSubjectProgressBar('📐 Mathematics', mathPct, const Color(0xFF2563EB), const Color(0xFFEFF6FF)),
+                    const SizedBox(height: 8),
+                    _buildSubjectProgressBar('⚛️ Science', sciPct, const Color(0xFF10B981), const Color(0xFFECFDF5)),
+                    const SizedBox(height: 8),
+                    _buildSubjectProgressBar('📖 English', engPct, const Color(0xFF8B5CF6), const Color(0xFFF5F3FF)),
+                    const SizedBox(height: 16),
+
+                    // === ATTENDANCE / CLASS ATTENDANCE PROGRESS ===
+                    Text(
+                      '🏫 Class Attendance',
+                      style: GoogleFonts.fredoka(fontSize: 14, fontWeight: FontWeight.bold, color: AdyapanTheme.textMain),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFF7ED),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: const Color(0xFFF59E0B).withOpacity(0.25)),
+                      ),
+                      child: Column(
+                        children: [
+                          Row(
+                            children: [
+                              // Big attendance percentage
+                              Column(
+                                children: [
+                                  Text('94%', style: GoogleFonts.fredoka(fontSize: 28, fontWeight: FontWeight.bold, color: const Color(0xFFF59E0B))),
+                                  Text('Attendance', style: GoogleFonts.outfit(fontSize: 9, fontWeight: FontWeight.bold, color: AdyapanTheme.textMuted)),
+                                ],
+                              ),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    _buildAttendanceStat('Classes Attended', '118 / 125'),
+                                    const SizedBox(height: 4),
+                                    _buildAttendanceStat('Excused Leaves', '4 days'),
+                                    const SizedBox(height: 4),
+                                    _buildAttendanceStat('Absences', '3 days'),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(6),
+                            child: LinearProgressIndicator(
+                              value: 0.94,
+                              minHeight: 8,
+                              backgroundColor: const Color(0xFFFEF3C7),
+                              valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFFF59E0B)),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '✅ Excellent! Keep it up — minimum 75% required',
+                            style: GoogleFonts.outfit(fontSize: 9, color: AdyapanTheme.textMuted, fontWeight: FontWeight.w500),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text('Close', style: GoogleFonts.fredoka(color: AdyapanTheme.textSub, fontWeight: FontWeight.bold)),
+              ),
+              ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.pop(context);
+                  state.setTab(1); // Go to Roadmaps tab for full details
+                },
+                icon: const Icon(Icons.map_outlined, size: 14, color: Colors.white),
+                label: Text('View Roadmap', style: GoogleFonts.fredoka(color: Colors.white, fontSize: 12)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF2563EB),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildProgressQuizRow(String title, bool completed, String status, Color accent) {
+    return Row(
+      children: [
+        Container(
+          width: 22,
+          height: 22,
+          decoration: BoxDecoration(
+            color: completed ? accent.withOpacity(0.15) : const Color(0xFFF1F5F9),
+            shape: BoxShape.circle,
+            border: Border.all(color: completed ? accent : const Color(0xFFE2E8F0)),
+          ),
+          child: Icon(
+            completed ? Icons.check_rounded : Icons.radio_button_unchecked_rounded,
+            size: 12,
+            color: completed ? accent : AdyapanTheme.textMuted,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(title, style: GoogleFonts.fredoka(fontSize: 11, fontWeight: FontWeight.w600, color: AdyapanTheme.textMain)),
+        ),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          decoration: BoxDecoration(
+            color: completed ? accent.withOpacity(0.1) : const Color(0xFFF1F5F9),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: completed ? accent.withOpacity(0.3) : const Color(0xFFE2E8F0)),
+          ),
+          child: Text(
+            status,
+            style: GoogleFonts.outfit(fontSize: 8, fontWeight: FontWeight.bold, color: completed ? accent : AdyapanTheme.textMuted),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSubjectProgressBar(String subject, double pct, Color accentColor, Color bgColor) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: accentColor.withOpacity(0.18)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(subject, style: GoogleFonts.fredoka(fontSize: 12, fontWeight: FontWeight.bold, color: AdyapanTheme.textMain)),
+              Text('${pct.toStringAsFixed(0)}%', style: GoogleFonts.fredoka(fontSize: 12, fontWeight: FontWeight.bold, color: accentColor)),
+            ],
+          ),
+          const SizedBox(height: 6),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: LinearProgressIndicator(
+              value: pct / 100,
+              minHeight: 7,
+              backgroundColor: accentColor.withOpacity(0.12),
+              valueColor: AlwaysStoppedAnimation<Color>(accentColor),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAttendanceStat(String label, String value) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label, style: GoogleFonts.outfit(fontSize: 10, color: AdyapanTheme.textSub, fontWeight: FontWeight.w500)),
+        Text(value, style: GoogleFonts.fredoka(fontSize: 10, fontWeight: FontWeight.bold, color: AdyapanTheme.textMain)),
+      ],
+    );
   }
 
   // 1. Attendance details modal
@@ -659,7 +1032,7 @@ class DashboardScreen extends StatelessWidget {
                           const SizedBox(width: 12),
                           Expanded(child: _buildGridCard(context, state, '📈', 'Progress', '+12%', const Color(0xFFEFF6FF), const Color(0xFF2563EB))),
                           const SizedBox(width: 12),
-                          const Spacer(), // Perfect layout symmetry
+                          Expanded(child: _buildGridCard(context, state, '🏆', 'Leaderboard', 'Standings', const Color(0xFFFFFBEB), const Color(0xFFFFB000))),
                         ],
                       ),
                     ],
@@ -1374,6 +1747,617 @@ class DashboardScreen extends StatelessWidget {
           }
         );
       }
+    );
+  }
+
+  // LEADBOARD COMPONENT DRAWING
+  Widget _buildLeaderboardSection(AppState state) {
+    // Dynamic mappings of top 5 students for each game
+    final List<Map<String, dynamic>> bodmasLeaderboard = [
+      {'rank': 1, 'name': 'Anya Verma', 'score': 2450, 'avatar': '🧠', 'medal': '🥇'},
+      {'rank': 2, 'name': 'Kabir Gupta', 'score': 2310, 'avatar': '⚡', 'medal': '🥈'},
+      {'rank': 3, 'name': 'Rohan Malhotra', 'score': 2190, 'avatar': '🎨', 'medal': '🥉'},
+      {'rank': 4, 'name': state.studentName, 'score': 1980, 'avatar': '🚀', 'isUser': true},
+      {'rank': 5, 'name': 'Diya Sen', 'score': 1850, 'avatar': '🧬', 'medal': ''},
+    ];
+
+    final List<Map<String, dynamic>> syntaxLeaderboard = [
+      {'rank': 1, 'name': 'Kabir Gupta', 'score': 3100, 'avatar': '⚡', 'medal': '🥇'},
+      {'rank': 2, 'name': 'Anya Verma', 'score': 2950, 'avatar': '🧠', 'medal': '🥈'},
+      {'rank': 3, 'name': 'Ishaan Mehta', 'score': 2800, 'avatar': '🍕', 'medal': '🥉'},
+      {'rank': 4, 'name': state.studentName, 'score': 2750, 'avatar': '🚀', 'isUser': true},
+      {'rank': 5, 'name': 'Meera Iyer', 'score': 2500, 'avatar': '📖', 'medal': ''},
+    ];
+
+    final List<Map<String, dynamic>> wordLeaderboard = [
+      {'rank': 1, 'name': 'Diya Sen', 'score': 1900, 'avatar': '🧬', 'medal': '🥇'},
+      {'rank': 2, 'name': state.studentName, 'score': 1850, 'avatar': '🚀', 'isUser': true, 'medal': '🥈'},
+      {'rank': 3, 'name': 'Anya Verma', 'score': 1720, 'avatar': '🧠', 'medal': '🥉'},
+      {'rank': 4, 'name': 'Rohan Malhotra', 'score': 1600, 'avatar': '🎨', 'medal': ''},
+      {'rank': 5, 'name': 'Ishaan Mehta', 'score': 1450, 'avatar': '🍕', 'medal': ''},
+    ];
+
+    List<Map<String, dynamic>> activeLeaderboard;
+    String gameTitle;
+    if (_selectedLeaderboardTab == 0) {
+      activeLeaderboard = bodmasLeaderboard;
+      gameTitle = '🧮 BODMAS Balancer';
+    } else if (_selectedLeaderboardTab == 1) {
+      activeLeaderboard = syntaxLeaderboard;
+      gameTitle = '📝 Syntax Blocks';
+    } else {
+      activeLeaderboard = wordLeaderboard;
+      gameTitle = '🔠 Word Unscramble';
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                '🏆 School-wide Leaderboards',
+                style: GoogleFonts.fredoka(fontSize: 18, fontWeight: FontWeight.bold, color: AdyapanTheme.textMain),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.green[50]?.withOpacity(0.8),
+                  borderRadius: BorderRadius.circular(30),
+                  border: Border.all(color: Colors.green.withOpacity(0.2)),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 6,
+                      height: 6,
+                      decoration: const BoxDecoration(color: Colors.green, shape: BoxShape.circle),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Live Standings',
+                      style: GoogleFonts.outfit(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.green[800]),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'See where you stand among all students in Adyapan School games!',
+            style: GoogleFonts.outfit(fontSize: 11, color: AdyapanTheme.textMuted, fontWeight: FontWeight.w500),
+          ),
+          const SizedBox(height: 14),
+
+          // TABS ROW FOR SELECTING GAME LEADERBOARD
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
+            child: Row(
+              children: [
+                _buildLeaderboardTabButton(0, 'BODMAS Balancer', '🧮'),
+                const SizedBox(width: 8),
+                _buildLeaderboardTabButton(1, 'Syntax Blocks', '📝'),
+                const SizedBox(width: 8),
+                _buildLeaderboardTabButton(2, 'Word Unscramble', '🔠'),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+
+          // LEADBOARD CONTAINER CARD
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.82),
+              border: Border.all(color: const Color(0xFF3B82F6).withOpacity(0.18), width: 1.5),
+              borderRadius: BorderRadius.circular(28),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF2563EB).withOpacity(0.08),
+                  offset: const Offset(0, 8),
+                  blurRadius: 24,
+                ),
+                BoxShadow(
+                  color: Colors.white.withOpacity(0.4),
+                  offset: const Offset(-2, -2),
+                  blurRadius: 6,
+                ),
+              ],
+            ),
+            child: Column(
+              children: [
+                // Active game title header
+                Row(
+                  children: [
+                    const Icon(Icons.stars_rounded, color: Colors.orangeAccent, size: 18),
+                    const SizedBox(width: 6),
+                    Text(
+                      gameTitle,
+                      style: GoogleFonts.fredoka(fontSize: 13, fontWeight: FontWeight.bold, color: const Color(0xFF1E3A8A)),
+                    ),
+                    const Spacer(),
+                    Text(
+                      'Scores reset weekly',
+                      style: GoogleFonts.outfit(fontSize: 9, color: AdyapanTheme.textMuted, fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
+                const Divider(height: 20, color: Color(0xFFEFF6FF), thickness: 1.5),
+
+                // Leaderboard list rows
+                ...List.generate(activeLeaderboard.length, (index) {
+                  final row = activeLeaderboard[index];
+                  final isUser = row['isUser'] == true;
+                  
+                  return Container(
+                    margin: const EdgeInsets.symmetric(vertical: 4.0),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: isUser 
+                          ? const Color(0xFFEFF6FF).withOpacity(0.9)
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: isUser 
+                            ? const Color(0xFFBFDBFE) 
+                            : Colors.transparent, 
+                        width: 1.2
+                      ),
+                      boxShadow: isUser ? [
+                        BoxShadow(
+                          color: const Color(0xFF2563EB).withOpacity(0.06),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        )
+                      ] : null,
+                    ),
+                    child: Row(
+                      children: [
+                        // Rank display
+                        SizedBox(
+                          width: 28,
+                          child: () {
+                            if (row['medal'] != null && row['medal'].isNotEmpty) {
+                              return Text(row['medal'], style: const TextStyle(fontSize: 18), textAlign: TextAlign.center);
+                            }
+                            return Text(
+                              '#${row['rank']}', 
+                              style: GoogleFonts.fredoka(
+                                fontSize: 13, 
+                                fontWeight: FontWeight.w800, 
+                                color: isUser ? const Color(0xFF2563EB) : AdyapanTheme.textMuted
+                              ),
+                              textAlign: TextAlign.center,
+                            );
+                          }(),
+                        ),
+                        const SizedBox(width: 8),
+
+                        // Avatar / Symbol
+                        Container(
+                          width: 32,
+                          height: 32,
+                          decoration: BoxDecoration(
+                            color: isUser ? const Color(0xFFDBEAFE) : const Color(0xFFF1F5F9),
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: isUser ? const Color(0xFF93C5FD) : const Color(0xFFE2E8F0), 
+                              width: 1.2
+                            ),
+                          ),
+                          alignment: Alignment.center,
+                          child: Text(row['avatar'], style: const TextStyle(fontSize: 14)),
+                        ),
+                        const SizedBox(width: 12),
+
+                        // Name
+                        Expanded(
+                          child: Text(
+                            isUser ? '${row['name']} (You)' : row['name'],
+                            style: GoogleFonts.fredoka(
+                              fontSize: 12, 
+                              fontWeight: isUser ? FontWeight.bold : FontWeight.w600,
+                              color: isUser ? const Color(0xFF1E3A8A) : AdyapanTheme.textMain,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+
+                        // Score
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: isUser ? const Color(0xFF3B82F6) : const Color(0xFFF1F5F9),
+                            borderRadius: BorderRadius.circular(12),
+                            boxShadow: isUser ? [
+                              BoxShadow(
+                                color: const Color(0xFF3B82F6).withOpacity(0.2),
+                                blurRadius: 4,
+                                offset: const Offset(0, 2),
+                              )
+                            ] : null,
+                          ),
+                          child: Text(
+                            '${row['score']} pts',
+                            style: GoogleFonts.outfit(
+                              fontSize: 10, 
+                              fontWeight: FontWeight.bold, 
+                              color: isUser ? Colors.white : const Color(0xFF475569)
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLeaderboardTabButton(int index, String title, String emoji) {
+    bool isSelected = _selectedLeaderboardTab == index;
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _selectedLeaderboardTab = index;
+        });
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          gradient: isSelected
+              ? const LinearGradient(
+                  colors: [Color(0xFF2563EB), Color(0xFF4F46E5)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                )
+              : null,
+          color: isSelected ? null : Colors.white.withOpacity(0.7),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isSelected 
+                ? const Color(0xFF2563EB).withOpacity(0.5)
+                : const Color(0xFF3B82F6).withOpacity(0.12),
+            width: 1.2
+          ),
+          boxShadow: isSelected ? [
+            BoxShadow(
+              color: const Color(0xFF2563EB).withOpacity(0.2),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
+            )
+          ] : null,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(emoji, style: const TextStyle(fontSize: 12)),
+            const SizedBox(width: 6),
+            Text(
+              title,
+              style: GoogleFonts.fredoka(
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+                color: isSelected ? Colors.white : AdyapanTheme.textMain,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // DIALOG-BASED INTERACTIVE LEADERBOARD
+  void _showLeaderboardDialog(BuildContext context, AppState state) {
+    int localSelectedTab = 0; // 0: BODMAS, 1: Syntax, 2: Word
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            // Dynamic mappings of top 5 students for each game
+            final List<Map<String, dynamic>> bodmasLeaderboard = [
+              {'rank': 1, 'name': 'Anya Verma', 'score': 2450, 'avatar': '🧠', 'medal': '🥇'},
+              {'rank': 2, 'name': 'Kabir Gupta', 'score': 2310, 'avatar': '⚡', 'medal': '🥈'},
+              {'rank': 3, 'name': 'Rohan Malhotra', 'score': 2190, 'avatar': '🎨', 'medal': '🥉'},
+              {'rank': 4, 'name': state.studentName, 'score': 1980, 'avatar': '🚀', 'isUser': true},
+              {'rank': 5, 'name': 'Diya Sen', 'score': 1850, 'avatar': '🧬', 'medal': ''},
+            ];
+
+            final List<Map<String, dynamic>> syntaxLeaderboard = [
+              {'rank': 1, 'name': 'Kabir Gupta', 'score': 3100, 'avatar': '⚡', 'medal': '🥇'},
+              {'rank': 2, 'name': 'Anya Verma', 'score': 2950, 'avatar': '🧠', 'medal': '🥈'},
+              {'rank': 3, 'name': 'Ishaan Mehta', 'score': 2800, 'avatar': '🍕', 'medal': '🥉'},
+              {'rank': 4, 'name': state.studentName, 'score': 2750, 'avatar': '🚀', 'isUser': true},
+              {'rank': 5, 'name': 'Meera Iyer', 'score': 2500, 'avatar': '📖', 'medal': ''},
+            ];
+
+            final List<Map<String, dynamic>> wordLeaderboard = [
+              {'rank': 1, 'name': 'Diya Sen', 'score': 1900, 'avatar': '🧬', 'medal': '🥇'},
+              {'rank': 2, 'name': state.studentName, 'score': 1850, 'avatar': '🚀', 'isUser': true, 'medal': '🥈'},
+              {'rank': 3, 'name': 'Anya Verma', 'score': 1720, 'avatar': '🧠', 'medal': '🥉'},
+              {'rank': 4, 'name': 'Rohan Malhotra', 'score': 1600, 'avatar': '🎨', 'medal': ''},
+              {'rank': 5, 'name': 'Ishaan Mehta', 'score': 1450, 'avatar': '🍕', 'medal': ''},
+            ];
+
+            List<Map<String, dynamic>> activeLeaderboard;
+            String gameTitle;
+            if (localSelectedTab == 0) {
+              activeLeaderboard = bodmasLeaderboard;
+              gameTitle = '🧮 BODMAS Balancer';
+            } else if (localSelectedTab == 1) {
+              activeLeaderboard = syntaxLeaderboard;
+              gameTitle = '📝 Syntax Blocks';
+            } else {
+              activeLeaderboard = wordLeaderboard;
+              gameTitle = '🔠 Word Unscramble';
+            }
+
+            return AlertDialog(
+              backgroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+              titlePadding: const EdgeInsets.only(top: 20, left: 20, right: 20),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              title: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    '🏆 School Leaderboards',
+                    style: GoogleFonts.fredoka(
+                      fontSize: 18, 
+                      fontWeight: FontWeight.bold, 
+                      color: const Color(0xFF1E3A8A)
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFF1F5F9),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.close, size: 16, color: Color(0xFF64748B)),
+                    ),
+                  ),
+                ],
+              ),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Live standings of Adyapan School game players.',
+                      style: GoogleFonts.outfit(fontSize: 11, color: AdyapanTheme.textMuted, fontWeight: FontWeight.w500),
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Toggle Game Tabs Row
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      physics: const BouncingScrollPhysics(),
+                      child: Row(
+                        children: [
+                          _buildDialogTabButton(0, 'BODMAS', '🧮', localSelectedTab, () {
+                            setDialogState(() {
+                              localSelectedTab = 0;
+                            });
+                          }),
+                          const SizedBox(width: 6),
+                          _buildDialogTabButton(1, 'Syntax', '📝', localSelectedTab, () {
+                            setDialogState(() {
+                              localSelectedTab = 1;
+                            });
+                          }),
+                          const SizedBox(width: 6),
+                          _buildDialogTabButton(2, 'Words', '🔠', localSelectedTab, () {
+                            setDialogState(() {
+                              localSelectedTab = 2;
+                            });
+                          }),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Active game header
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF8FAFC),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.stars_rounded, color: Colors.orangeAccent, size: 14),
+                          const SizedBox(width: 6),
+                          Text(
+                            gameTitle,
+                            style: GoogleFonts.fredoka(fontSize: 11, fontWeight: FontWeight.bold, color: const Color(0xFF1E3A8A)),
+                          ),
+                          const Spacer(),
+                          Text(
+                            'Scores reset weekly',
+                            style: GoogleFonts.outfit(fontSize: 8, color: AdyapanTheme.textMuted, fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+
+                    // Leaderboard items list inside dialog
+                    Container(
+                      constraints: const BoxConstraints(maxHeight: 280),
+                      child: ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: activeLeaderboard.length,
+                        itemBuilder: (context, index) {
+                          final row = activeLeaderboard[index];
+                          final isUser = row['isUser'] == true;
+                          
+                          return Container(
+                            margin: const EdgeInsets.symmetric(vertical: 3.0),
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: isUser 
+                                  ? const Color(0xFFEFF6FF)
+                                  : Colors.transparent,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: isUser 
+                                    ? const Color(0xFFBFDBFE) 
+                                    : Colors.transparent, 
+                                width: 1.0
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                // Medal/Rank
+                                SizedBox(
+                                  width: 24,
+                                  child: () {
+                                    if (row['medal'] != null && row['medal'].isNotEmpty) {
+                                      return Text(row['medal'], style: const TextStyle(fontSize: 14), textAlign: TextAlign.center);
+                                    }
+                                    return Text(
+                                      '#${row['rank']}', 
+                                      style: GoogleFonts.fredoka(
+                                        fontSize: 11, 
+                                        fontWeight: FontWeight.w800, 
+                                        color: isUser ? const Color(0xFF2563EB) : AdyapanTheme.textMuted
+                                      ),
+                                      textAlign: TextAlign.center,
+                                    );
+                                  }(),
+                                ),
+                                const SizedBox(width: 6),
+
+                                // Avatar icon
+                                Container(
+                                  width: 26,
+                                  height: 26,
+                                  decoration: BoxDecoration(
+                                    color: isUser ? const Color(0xFFDBEAFE) : const Color(0xFFF1F5F9),
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: isUser ? const Color(0xFF93C5FD) : const Color(0xFFE2E8F0), 
+                                      width: 1.0
+                                    ),
+                                  ),
+                                  alignment: Alignment.center,
+                                  child: Text(row['avatar'], style: const TextStyle(fontSize: 12)),
+                                ),
+                                const SizedBox(width: 8),
+
+                                // Dynamic name with dynamic profile
+                                Expanded(
+                                  child: Text(
+                                    isUser ? '${row['name']} (You)' : row['name'],
+                                    style: GoogleFonts.fredoka(
+                                      fontSize: 11, 
+                                      fontWeight: isUser ? FontWeight.bold : FontWeight.w600,
+                                      color: isUser ? const Color(0xFF1E3A8A) : AdyapanTheme.textMain,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+
+                                // Score pts
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: isUser ? const Color(0xFF3B82F6) : const Color(0xFFF1F5F9),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    '${row['score']} pts',
+                                    style: GoogleFonts.outfit(
+                                      fontSize: 9, 
+                                      fontWeight: FontWeight.bold, 
+                                      color: isUser ? Colors.white : const Color(0xFF475569)
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text(
+                    'Close', 
+                    style: GoogleFonts.fredoka(
+                      fontWeight: FontWeight.bold, 
+                      color: AdyapanTheme.textSub
+                    )
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildDialogTabButton(int index, String title, String emoji, int currentTab, VoidCallback onTap) {
+    bool isSelected = currentTab == index;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          gradient: isSelected
+              ? const LinearGradient(
+                  colors: [Color(0xFF2563EB), Color(0xFF4F46E5)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                )
+              : null,
+          color: isSelected ? null : Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected 
+                ? const Color(0xFF2563EB)
+                : const Color(0xFFE2E8F0),
+            width: 1.0
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(emoji, style: const TextStyle(fontSize: 10)),
+            const SizedBox(width: 4),
+            Text(
+              title,
+              style: GoogleFonts.fredoka(
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+                color: isSelected ? Colors.white : AdyapanTheme.textMain,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
