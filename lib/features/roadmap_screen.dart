@@ -249,10 +249,9 @@ class _RoadmapScreenState extends State<RoadmapScreen> with SingleTickerProvider
                                 if (stateKey != 'English') {
                                   state.completeRoadmapNode(stateKey, node['id']);
                                 }
-                                state.addXp(node['xp'] ?? 50);
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
-                                    content: Text('🎉 ${node['title']} unlocked! (+${node['xp'] ?? 50} XP)'),
+                                    content: Text('🎉 ${node['title']} unlocked! Topic marked complete.'),
                                     backgroundColor: const Color(0xFF10B981),
                                   ),
                                 );

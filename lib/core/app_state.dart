@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'db_helper.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -89,6 +90,17 @@ class AppState extends ChangeNotifier {
   List<Map<String, dynamic>> _attendanceLogs = [];
   List<Map<String, dynamic>> get attendanceLogs => _attendanceLogs;
 
+  // 8. Homework List (teacher-assigned)
+  List<Map<String, dynamic>> _homeworkList = [];
+  List<Map<String, dynamic>> get homeworkList => _homeworkList;
+
+  int get pendingHomeworkCount => _homeworkList.where((h) => h['submitted'] == false).length;
+  int get submittedHomeworkCount => _homeworkList.where((h) => h['submitted'] == true).length;
+
+  // 9. Notes / PDF Library (teacher-uploaded)
+  List<Map<String, dynamic>> _notesList = [];
+  List<Map<String, dynamic>> get notesList => _notesList;
+
   // 7. Completed Quizzes Progress & Syllabus Getters
   int _completedQuizzesCount = 4;
   int get completedQuizzesCount => _completedQuizzesCount;
@@ -118,7 +130,7 @@ class AppState extends ChangeNotifier {
   void incrementCompletedQuizzes() {
     _completedQuizzesCount++;
     _prefs.setInt('completed_quizzes_count', _completedQuizzesCount);
-    addXp(25); // Reward 25 XP for completing a quiz/game level!
+    addXp(25); // ✅ Only games give XP!
     notifyListeners();
   }
 
@@ -174,7 +186,7 @@ class AppState extends ChangeNotifier {
 
     // Load Profile Information
     _studentName = _prefs.getString('student_name') ?? 'Aarav Sharma';
-    _studentEmail = _prefs.getString('student_email') ?? 'aarav.sharma@school.com';
+    _studentEmail = _prefs.getString('student_email') ?? 'aarav.sharma@gmail.com';
     _studentPhone = _prefs.getString('student_phone') ?? '9876543210';
     _studentClass = _prefs.getString('student_class') ?? 'Class 10';
     _studentSchool = _prefs.getString('student_school') ?? 'Adyapan Public School';
@@ -188,7 +200,7 @@ class AppState extends ChangeNotifier {
       _userCredentials = Map<String, String>.from(jsonDecode(credsJson));
     } else {
       _userCredentials = {
-        'aarav.sharma@school.com': 'password123',
+        'aarav.sharma@gmail.com': 'password123',
       };
       _saveCredentials();
     }
@@ -199,12 +211,141 @@ class AppState extends ChangeNotifier {
       _attendanceLogs = List<Map<String, dynamic>>.from(jsonDecode(attendanceJson));
     } else {
       _attendanceLogs = [
-        {'subject': '📐 Mathematics', 'status': 'Present', 'time': '10:30 AM'},
-        {'subject': '⚛️ Science', 'status': 'Present', 'time': '11:45 AM'},
-        {'subject': '📖 English', 'status': 'Present', 'time': '01:30 PM'},
-        {'subject': '🌍 Social Studies', 'status': 'Excused', 'time': '02:45 PM'},
+        {'subject': '📐 Mathematics', 'status': 'Present', 'time': '10:30 AM', 'source': 'Live Class'},
+        {'subject': '⚛️ Science', 'status': 'Present', 'time': '11:45 AM', 'source': 'Live Class'},
+        {'subject': '📖 English', 'status': 'Present', 'time': '01:30 PM', 'source': 'Recorded Video'},
+        {'subject': '🌍 Social Studies', 'status': 'Excused', 'time': '02:45 PM', 'source': 'Manual'},
       ];
       _saveAttendance();
+    }
+
+    // Load Homework List
+    final homeworkJson = _prefs.getString('homework_list');
+    if (homeworkJson != null) {
+      _homeworkList = List<Map<String, dynamic>>.from(jsonDecode(homeworkJson));
+    } else {
+      _homeworkList = [
+        {
+          'id': 1,
+          'title': 'Quadratic Equations',
+          'subject': '📐 Mathematics',
+          'description': 'Solve problems 1-15 from Chapter 4. Show all steps clearly.',
+          'dueDate': 'Today',
+          'priority': 'High',
+          'submitted': false,
+          'submittedAt': null,
+          'addedBy': 'Mrs. Sharma',
+        },
+        {
+          'id': 2,
+          'title': 'Atomic Orbitals Diagram',
+          'subject': '⚛️ Science',
+          'description': 'Draw and label the first 4 atomic orbitals. Include electron configuration.',
+          'dueDate': 'Tomorrow',
+          'priority': 'Medium',
+          'submitted': false,
+          'submittedAt': null,
+          'addedBy': 'Mr. Verma',
+        },
+        {
+          'id': 3,
+          'title': 'Essay on Climate Change',
+          'subject': '📖 English',
+          'description': 'Write a 500-word essay on climate change and its impact on future generations.',
+          'dueDate': 'In 3 days',
+          'priority': 'Normal',
+          'submitted': false,
+          'submittedAt': null,
+          'addedBy': 'Miss Anjali',
+        },
+        {
+          'id': 4,
+          'title': 'Map Labeling - Rivers of India',
+          'subject': '🌍 Social Studies',
+          'description': 'Label all major rivers of India on the outline map provided.',
+          'dueDate': 'In 5 days',
+          'priority': 'Normal',
+          'submitted': true,
+          'submittedAt': 'Yesterday, 4:30 PM',
+          'addedBy': 'Mr. Kapoor',
+        },
+      ];
+      _saveHomework();
+    }
+
+    // Load Notes / PDF Library
+    final notesJson = _prefs.getString('notes_list');
+    if (notesJson != null) {
+      _notesList = List<Map<String, dynamic>>.from(jsonDecode(notesJson));
+    } else {
+      _notesList = [
+        {
+          'id': 1,
+          'title': 'BODMAS & Order of Operations',
+          'subject': '📐 Mathematics',
+          'description': 'Complete notes on BODMAS rules, solved examples, and practice problems.',
+          'fileName': 'BODMAS_Notes.pdf',
+          'fileSize': '1.2 MB',
+          'pages': 12,
+          'uploadedBy': 'Mrs. Sharma',
+          'uploadedAt': 'Today',
+          'type': 'PDF',
+          'filePath': '', // real path filled when backend is added
+        },
+        {
+          'id': 2,
+          'title': 'Atomic Structure & Periodic Table',
+          'subject': '⚛️ Science',
+          'description': 'Detailed notes on atomic orbitals, electron configuration, and periodic trends.',
+          'fileName': 'Atomic_Structure.pdf',
+          'fileSize': '3.4 MB',
+          'pages': 24,
+          'uploadedBy': 'Mr. Verma',
+          'uploadedAt': 'Yesterday',
+          'type': 'PDF',
+          'filePath': '',
+        },
+        {
+          'id': 3,
+          'title': 'English Grammar – Active & Passive Voice',
+          'subject': '📖 English',
+          'description': 'Rules, examples, and exercises for transforming active voice to passive voice.',
+          'fileName': 'Grammar_Voice.pdf',
+          'fileSize': '0.8 MB',
+          'pages': 8,
+          'uploadedBy': 'Miss Anjali',
+          'uploadedAt': '2 days ago',
+          'type': 'PDF',
+          'filePath': '',
+        },
+        {
+          'id': 4,
+          'title': 'Python Syntax Cheat Sheet',
+          'subject': '💻 Computer Science',
+          'description': 'Quick reference for Python syntax, built-in functions, and common patterns.',
+          'fileName': 'Python_CheatSheet.pdf',
+          'fileSize': '0.6 MB',
+          'pages': 5,
+          'uploadedBy': 'Mr. Kapoor',
+          'uploadedAt': '3 days ago',
+          'type': 'PDF',
+          'filePath': '',
+        },
+        {
+          'id': 5,
+          'title': 'Quadratic Equations – Full Chapter',
+          'subject': '📐 Mathematics',
+          'description': 'Complete chapter notes including derivation of quadratic formula and graph sketching.',
+          'fileName': 'Quadratic_Equations.pdf',
+          'fileSize': '2.1 MB',
+          'pages': 18,
+          'uploadedBy': 'Mrs. Sharma',
+          'uploadedAt': '1 week ago',
+          'type': 'PDF',
+          'filePath': '',
+        },
+      ];
+      _saveNotes();
     }
 
     _initialized = true;
@@ -229,13 +370,7 @@ class AppState extends ChangeNotifier {
   void toggleTodo(int id) {
     final index = _todos.indexWhere((t) => t['id'] == id);
     if (index != -1) {
-      final wasCompleted = _todos[index]['completed'];
-      _todos[index]['completed'] = !wasCompleted;
-      
-      // If completed, reward 20 XP!
-      if (!wasCompleted) {
-        addXp(20);
-      }
+      _todos[index]['completed'] = !_todos[index]['completed'];
       _saveTodos();
       notifyListeners();
     }
@@ -265,15 +400,10 @@ class AppState extends ChangeNotifier {
       final index = list.indexWhere((node) => node['id'] == nodeId);
       if (index != -1 && list[index]['status'] != 'completed') {
         list[index]['status'] = 'completed';
-        
-        // Add 50 XP on completion!
-        addXp(50);
-
         // Unlock the next node
         if (index + 1 < list.length) {
           list[index + 1]['status'] = 'unlocked';
         }
-        
         _prefs.setString('roadmaps', jsonEncode(_roadmaps));
         notifyListeners();
       }
@@ -284,10 +414,9 @@ class AppState extends ChangeNotifier {
   void logStudySession(int minutes) {
     _studySessions.add(minutes);
     if (_studySessions.length > 7) {
-      _studySessions.removeAt(0); // keep rolling 7 days
+      _studySessions.removeAt(0);
     }
     _prefs.setString('study_sessions', jsonEncode(_studySessions));
-    addXp(minutes * 2); // 2 XP per minute of focus!
     notifyListeners();
   }
 
@@ -304,9 +433,6 @@ class AppState extends ChangeNotifier {
 
   void toggleParentQuest() {
     _parentQuestCompleted = !_parentQuestCompleted;
-    if (_parentQuestCompleted) {
-      addXp(_parentQuestXp);
-    }
     _prefs.setBool('parent_quest_completed', _parentQuestCompleted);
     notifyListeners();
   }
@@ -369,31 +495,74 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  bool registerUser({
+  // Validate credentials against remote TiDB Database strictly (no local fallbacks)
+  Future<bool> loginUser(String email, String password) async {
+    try {
+      final user = await DbHelper.loginUser(email, password);
+      if (user == null) {
+        return false;
+      }
+      
+      // Update local profile state
+      _studentName = user['name'];
+      _studentEmail = user['email'];
+      _studentPhone = user['phone'];
+      _studentClass = user['className'];
+      _studentSchool = user['school'];
+      
+      _prefs.setString('student_name', _studentName);
+      _prefs.setString('student_email', _studentEmail);
+      _prefs.setString('student_phone', _studentPhone);
+      _prefs.setString('student_class', _studentClass);
+      _prefs.setString('student_school', _studentSchool);
+      
+      _isLoggedIn = true;
+      _prefs.setBool('is_logged_in', true);
+      notifyListeners();
+      
+      return true;
+    } catch (e) {
+      print('❌ Database login strictly failed: $e');
+      // Rethrow to let the UI catch and display the exact database connection error!
+      throw Exception('Database Connection Error: $e');
+    }
+  }
+
+  // Register a new user in remote TiDB Database strictly (no local fallbacks)
+  Future<bool> registerUser({
     required String email,
     required String password,
     required String name,
     required String phone,
     required String className,
     required String school,
-  }) {
-    final lowerEmail = email.trim().toLowerCase();
-    if (_userCredentials.containsKey(lowerEmail)) {
-      return false; // Email already registered!
+  }) async {
+    try {
+      final success = await DbHelper.registerUser(
+        name: name,
+        email: email,
+        phone: phone,
+        className: className,
+        school: school,
+        password: password,
+      );
+
+      if (!success) return false;
+
+      updateProfile(
+        name: name,
+        email: email,
+        phone: phone,
+        className: className,
+        school: school,
+      );
+
+      return true;
+    } catch (e) {
+      print('❌ Database registration strictly failed: $e');
+      // Rethrow to let the UI catch and display the exact database connection error!
+      throw Exception('Database Connection Error: $e');
     }
-
-    _userCredentials[lowerEmail] = password;
-    _saveCredentials();
-
-    updateProfile(
-      name: name,
-      email: email,
-      phone: phone,
-      className: className,
-      school: school,
-    );
-
-    return true;
   }
 
   // Attendance Persistence helpers
@@ -401,20 +570,118 @@ class AppState extends ChangeNotifier {
     _prefs.setString('attendance_logs', jsonEncode(_attendanceLogs));
   }
 
-  void markAttendance(String subject, String status, String time) {
+  void markAttendance(String subject, String status, String time, {String source = 'Manual'}) {
     final index = _attendanceLogs.indexWhere((log) => log['subject'].trim().toLowerCase() == subject.trim().toLowerCase());
     if (index != -1) {
       _attendanceLogs[index]['status'] = status;
       _attendanceLogs[index]['time'] = time;
+      _attendanceLogs[index]['source'] = source;
     } else {
       _attendanceLogs.add({
         'subject': subject,
         'status': status,
         'time': time,
+        'source': source,
       });
     }
     _saveAttendance();
-    addXp(30); // Reward 30 Focus XP!
+    notifyListeners();
+  }
+
+  // ── HOMEWORK MANAGEMENT ──
+  void _saveHomework() {
+    _prefs.setString('homework_list', jsonEncode(_homeworkList));
+  }
+
+  // Teacher adds homework
+  void addHomework({
+    required String title,
+    required String subject,
+    required String description,
+    required String dueDate,
+    required String priority,
+    required String addedBy,
+  }) {
+    final newId = _homeworkList.isEmpty
+        ? 1
+        : (_homeworkList.map((h) => h['id'] as int).reduce((a, b) => a > b ? a : b) + 1);
+    _homeworkList.insert(0, {
+      'id': newId,
+      'title': title,
+      'subject': subject,
+      'description': description,
+      'dueDate': dueDate,
+      'priority': priority,
+      'submitted': false,
+      'submittedAt': null,
+      'addedBy': addedBy,
+    });
+    _saveHomework();
+    notifyListeners();
+  }
+
+  // Student submits homework
+  bool submitHomework(int id) {
+    final index = _homeworkList.indexWhere((h) => h['id'] == id);
+    if (index == -1 || _homeworkList[index]['submitted'] == true) return false;
+    final now = DateTime.now();
+    final hour = now.hour > 12 ? now.hour - 12 : (now.hour == 0 ? 12 : now.hour);
+    final ampm = now.hour >= 12 ? 'PM' : 'AM';
+    final min = now.minute < 10 ? '0${now.minute}' : '${now.minute}';
+    _homeworkList[index]['submitted'] = true;
+    _homeworkList[index]['submittedAt'] = 'Today, $hour:$min $ampm';
+    _saveHomework();
+    notifyListeners();
+    return true;
+  }
+
+  // Teacher deletes homework
+  void deleteHomework(int id) {
+    _homeworkList.removeWhere((h) => h['id'] == id);
+    _saveHomework();
+    notifyListeners();
+  }
+
+  // ── NOTES / PDF LIBRARY ──
+  void _saveNotes() {
+    _prefs.setString('notes_list', jsonEncode(_notesList));
+  }
+
+  // Teacher adds a note/PDF
+  void addNote({
+    required String title,
+    required String subject,
+    required String description,
+    required String fileName,
+    required String fileSize,
+    required int pages,
+    required String uploadedBy,
+    String filePath = '',
+  }) {
+    final newId = _notesList.isEmpty
+        ? 1
+        : (_notesList.map((n) => n['id'] as int).reduce((a, b) => a > b ? a : b) + 1);
+    _notesList.insert(0, {
+      'id': newId,
+      'title': title,
+      'subject': subject,
+      'description': description,
+      'fileName': fileName,
+      'fileSize': fileSize,
+      'pages': pages,
+      'uploadedBy': uploadedBy,
+      'uploadedAt': 'Just now',
+      'type': 'PDF',
+      'filePath': filePath,
+    });
+    _saveNotes();
+    notifyListeners();
+  }
+
+  // Teacher deletes a note
+  void deleteNote(int id) {
+    _notesList.removeWhere((n) => n['id'] == id);
+    _saveNotes();
     notifyListeners();
   }
 }

@@ -340,68 +340,6 @@ class _ArcadeScreenState extends State<ArcadeScreen> with SingleTickerProviderSt
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Premium panel card for custom questions creation
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: AdyapanTheme.glassBorder, width: 1.5),
-            boxShadow: [
-              BoxShadow(
-                color: AdyapanTheme.blueAccent.withOpacity(0.04),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
-              )
-            ],
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Quiz Arena Panel 👑', style: AdyapanTheme.fredoka(fontSize: 15, fontWeight: FontWeight.bold, color: AdyapanTheme.textMain)),
-                    const SizedBox(height: 2),
-                    Text('Create & test your own custom study questions!', style: AdyapanTheme.outfit(fontSize: 11, color: AdyapanTheme.textSub)),
-                  ],
-                ),
-              ),
-              // Plus symbol custom question trigger
-              GestureDetector(
-                onTap: _showAddQuestionDialog,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF3B82F6), Color(0xFF1D4ED8)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(30),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFF1D4ED8).withOpacity(0.2),
-                        blurRadius: 6,
-                        offset: const Offset(0, 3),
-                      )
-                    ],
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.add_rounded, color: Colors.white, size: 14),
-                      const SizedBox(width: 4),
-                      Text('Add Quiz', style: GoogleFonts.fredoka(fontSize: 11, color: Colors.white, fontWeight: FontWeight.bold)),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 20),
-
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [

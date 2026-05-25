@@ -12,82 +12,207 @@ class HomeworkScreen extends StatefulWidget {
   State<HomeworkScreen> createState() => _HomeworkScreenState();
 }
 
-class _HomeworkScreenState extends State<HomeworkScreen> {
-  late ConfettiController _confettiController;
+class _HomeworkScreenState extends State<HomeworkScreen> with SingleTickerProviderStateMixin {
+  late ConfettiController _confetti;
+  late TabController _tabController;
 
   @override
   void initState() {
     super.initState();
-    _confettiController = ConfettiController(duration: const Duration(seconds: 1));
+    _confetti = ConfettiController(duration: const Duration(seconds: 2));
+    _tabController = TabController(length: 2, vsync: this);
   }
 
   @override
   void dispose() {
-    _confettiController.dispose();
+    _confetti.dispose();
+    _tabController.dispose();
     super.dispose();
   }
 
-  Widget _buildHomeworkRow(BuildContext context, AppState state, String taskName, String deadline, String level) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12.0),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.82),
-          border: Border.all(color: const Color(0xFF3B82F6).withOpacity(0.12), width: 1.2),
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.02),
-              blurRadius: 6,
-              offset: const Offset(0, 2),
-            )
-          ],
+  Color _priorityColor(String priority) {
+    if (priority == 'High') return const Color(0xFFEF4444);
+    if (priority == 'Medium') return const Color(0xFFF59E0B);
+    return const Color(0xFF10B981);
+  }
+
+  Color _priorityBg(String priority) {
+    if (priority == 'High') return const Color(0xFFFEF2F2);
+    if (priority == 'Medium') return const Color(0xFFFFFBEB);
+    return const Color(0xFFECFDF5);
+  }
+
+  void _submitHomework(AppState state, int id, String title) {
+    final done = state.submitHomework(id);
+    if (done) {
+      _confetti.play();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('🎉 "$title" submitted successfully!'),
+          backgroundColor: const Color(0xFF10B981),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(taskName, style: GoogleFonts.fredoka(fontSize: 14, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 4),
-                  Row(
+      );
+    }
+  }
+
+  Widget _buildHomeworkCard(AppState state, Map<String, dynamic> hw) {
+    final bool submitted = hw['submitted'] == true;
+    final priority = hw['priority'] as String;
+    final pColor = _priorityColor(priority);
+    final pBg = _priorityBg(priority);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: submitted ? const Color(0xFF10B981).withOpacity(0.3) : pColor.withOpacity(0.2),
+          width: 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Top header
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
+            child: Row(
+              children: [
+                // Subject badge
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: pBg,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: pColor.withOpacity(0.3)),
+                  ),
+                  child: Text(
+                    hw['subject'],
+                    style: GoogleFonts.outfit(fontSize: 9, fontWeight: FontWeight.bold, color: pColor),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                  ),
+                  child: Text(
+                    '$priority Priority',
+                    style: GoogleFonts.outfit(fontSize: 9, fontWeight: FontWeight.bold, color: AdyapanTheme.textMuted),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Title + description
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(hw['title'], style: GoogleFonts.fredoka(fontSize: 15, fontWeight: FontWeight.bold, color: AdyapanTheme.textMain)),
+                const SizedBox(height: 4),
+                Text(hw['description'], style: GoogleFonts.outfit(fontSize: 11, color: AdyapanTheme.textSub, height: 1.4)),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+
+          // Footer
+          Container(
+            padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
+            decoration: BoxDecoration(
+              color: submitted ? const Color(0xFFECFDF5) : const Color(0xFFF8FAFC),
+              borderRadius: const BorderRadius.only(bottomLeft: Radius.circular(20), bottomRight: Radius.circular(20)),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFFFBEB),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: const Color(0xFFFEF3C7)),
-                        ),
-                        child: Text(
-                          level,
-                          style: GoogleFonts.outfit(fontSize: 8, fontWeight: FontWeight.bold, color: Colors.orange),
-                        ),
+                      Row(
+                        children: [
+                          const Icon(Icons.calendar_today_rounded, size: 11, color: Color(0xFF64748B)),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text('Due: ${hw['dueDate']}', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.bold, color: AdyapanTheme.textSub), overflow: TextOverflow.ellipsis),
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 8),
-                      Text(deadline, style: GoogleFonts.outfit(fontSize: 10, color: AdyapanTheme.textSub)),
+                      const SizedBox(height: 3),
+                      Row(
+                        children: [
+                          const Icon(Icons.person_outline_rounded, size: 11, color: Color(0xFF64748B)),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text('By ${hw['addedBy']}', style: GoogleFonts.outfit(fontSize: 10, color: AdyapanTheme.textMuted), overflow: TextOverflow.ellipsis),
+                          ),
+                        ],
+                      ),
+                      if (submitted && hw['submittedAt'] != null) ...[
+                        const SizedBox(height: 3),
+                        Row(
+                          children: [
+                            const Icon(Icons.check_circle_rounded, size: 11, color: Color(0xFF10B981)),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text('Submitted: ${hw['submittedAt']}', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.bold, color: const Color(0xFF10B981)), overflow: TextOverflow.ellipsis),
+                            ),
+                          ],
+                        ),
+                      ],
                     ],
                   ),
-                ],
-              ),
+                ),
+                const SizedBox(width: 8),
+                // Submit / Done button
+                submitted
+                    ? Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF10B981),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.check_rounded, size: 13, color: Colors.white),
+                            const SizedBox(width: 4),
+                            Text('Submitted', style: GoogleFonts.fredoka(fontSize: 11, color: Colors.white, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                      )
+                    : ElevatedButton.icon(
+                        onPressed: () => _submitHomework(state, hw['id'], hw['title']),
+                        icon: const Icon(Icons.upload_rounded, size: 13, color: Colors.white),
+                        label: Text('Submit', style: GoogleFonts.fredoka(fontSize: 11, color: Colors.white, fontWeight: FontWeight.bold)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF2563EB),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                      ),
+              ],
             ),
-            IconButton(
-              icon: const Icon(Icons.check_circle_outline, color: AdyapanTheme.green, size: 28),
-              onPressed: () {
-                state.addXp(15);
-                _confettiController.play();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('🎉 Homework "$taskName" Completed! (+15 XP Gain!)'),
-                    backgroundColor: AdyapanTheme.green,
-                  ),
-                );
-              },
-            )
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -95,88 +220,172 @@ class _HomeworkScreenState extends State<HomeworkScreen> {
   @override
   Widget build(BuildContext context) {
     final state = Provider.of<AppState>(context);
+    final pending = state.homeworkList.where((h) => h['submitted'] == false).toList();
+    final submitted = state.homeworkList.where((h) => h['submitted'] == true).toList();
+    final all = state.homeworkList;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF1F5F9),
-      appBar: AppBar(
-        title: Text('📝 Homework Dashboard', style: GoogleFonts.fredoka(fontWeight: FontWeight.bold, color: const Color(0xFF1E3A8A))),
-        backgroundColor: Colors.white.withOpacity(0.8),
-        elevation: 0,
-        iconTheme: const IconThemeData(color: Color(0xFF1E3A8A)),
-      ),
       body: Stack(
-        alignment: Alignment.topCenter,
         children: [
-          Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  Color(0xFFEEF2F6),
-                  Color(0xFFE0E7FF),
-                  Color(0xFFFFF0F5),
-                ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-            ),
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(20.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // Header intro
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.82),
-                      border: Border.all(color: const Color(0xFF3B82F6).withOpacity(0.18), width: 1.5),
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFF2563EB).withOpacity(0.1),
-                          offset: const Offset(0, 4),
-                          blurRadius: 10,
-                        )
-                      ],
-                    ),
-                    child: Row(
+          Column(
+            children: [
+              // ── HEADER ──
+              Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Color(0xFF2563EB), Color(0xFF1E40AF)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.only(
+                    bottomLeft: Radius.circular(28),
+                    bottomRight: Radius.circular(28),
+                  ),
+                ),
+                child: SafeArea(
+                  bottom: false,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(8, 4, 16, 20),
+                    child: Column(
                       children: [
-                        const Text('🎯', style: TextStyle(fontSize: 32)),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Pending Assignments',
-                                style: GoogleFonts.fredoka(fontSize: 16, fontWeight: FontWeight.bold, color: const Color(0xFF1E3A8A)),
+                        Row(
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
+                              onPressed: () => Navigator.pop(context),
+                            ),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    '📝 Homework Portal',
+                                    style: GoogleFonts.fredoka(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
+                                  ),
+                                  Text(
+                                    'Submit assignments & view your school agenda',
+                                    style: GoogleFonts.outfit(fontSize: 10, color: Colors.white.withOpacity(0.8), fontWeight: FontWeight.w500),
+                                  ),
+                                ],
                               ),
-                              Text(
-                                'Complete assignments to earn immediate XP levels!',
-                                style: GoogleFonts.outfit(fontSize: 11, color: AdyapanTheme.textSub),
-                              ),
-                            ],
-                          ),
-                        )
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+
+                        // Stats row
+                        Row(
+                          children: [
+                            _headerStat('${all.length}', 'Total', Icons.assignment_rounded),
+                            const SizedBox(width: 10),
+                            _headerStat('${pending.length}', 'Pending', Icons.pending_actions_rounded),
+                            const SizedBox(width: 10),
+                            _headerStat('${submitted.length}', 'Submitted', Icons.task_alt_rounded),
+                          ],
+                        ),
                       ],
                     ),
                   ),
-                  const SizedBox(height: 24),
-
-                  _buildHomeworkRow(context, state, '📐 Math: Quadratic Equations', 'Due: Today', 'HIGH PRIORITY'),
-                  _buildHomeworkRow(context, state, '⚛️ Science: Atomic Orbitals', 'Due: Tomorrow', 'MEDIUM PRIORITY'),
-                  _buildHomeworkRow(context, state, '📖 English: Essay Writing', 'Due: 3 days', 'NORMAL PRIORITY'),
-                  _buildHomeworkRow(context, state, '🌍 Social: Map Labeling', 'Due: 5 days', 'NORMAL PRIORITY'),
-                ],
+                ),
               ),
+
+              // ── TAB BAR ──
+              Container(
+                color: Colors.white,
+                child: TabBar(
+                  controller: _tabController,
+                  labelStyle: GoogleFonts.fredoka(fontSize: 13, fontWeight: FontWeight.bold),
+                  unselectedLabelStyle: GoogleFonts.fredoka(fontSize: 13),
+                  labelColor: const Color(0xFF2563EB),
+                  unselectedLabelColor: AdyapanTheme.textMuted,
+                  indicatorColor: const Color(0xFF2563EB),
+                  tabs: [
+                    Tab(text: 'Pending (${pending.length})'),
+                    Tab(text: 'Submitted (${submitted.length})'),
+                  ],
+                ),
+              ),
+
+              // ── CONTENT ──
+              Expanded(
+                child: TabBarView(
+                  controller: _tabController,
+                  children: [
+                    // PENDING TAB
+                    pending.isEmpty
+                        ? _emptyState('🎉 All Done!', 'No pending homework. Great work!')
+                        : ListView.builder(
+                            padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+                            itemCount: pending.length,
+                            itemBuilder: (context, i) => _buildHomeworkCard(state, pending[i]),
+                          ),
+
+                    // SUBMITTED TAB
+                    submitted.isEmpty
+                        ? _emptyState('📭 Nothing submitted yet', 'Complete pending homework to see them here.')
+                        : ListView.builder(
+                            padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+                            itemCount: submitted.length,
+                            itemBuilder: (context, i) => _buildHomeworkCard(state, submitted[i]),
+                          ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+
+          // Confetti
+          Align(
+            alignment: Alignment.topCenter,
+            child: ConfettiWidget(
+              confettiController: _confetti,
+              blastDirectionality: BlastDirectionality.explosive,
+              shouldLoop: false,
+              colors: const [Color(0xFF2563EB), Color(0xFF10B981), Colors.pink, Colors.orange, Colors.purple],
             ),
           ),
-          ConfettiWidget(
-            confettiController: _confettiController,
-            blastDirectionality: BlastDirectionality.explosive,
-            shouldLoop: false,
-            colors: const [Colors.green, Colors.blue, Colors.pink, Colors.orange, Colors.purple],
-          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _headerStat(String value, String label, IconData icon) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 10),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.15),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: Colors.white.withOpacity(0.25)),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 16, color: Colors.white),
+            const SizedBox(width: 6),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(value, style: GoogleFonts.fredoka(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+                Text(label, style: GoogleFonts.outfit(fontSize: 9, color: Colors.white.withOpacity(0.75), fontWeight: FontWeight.bold)),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _emptyState(String title, String subtitle) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Text('🎒', style: TextStyle(fontSize: 56)),
+          const SizedBox(height: 14),
+          Text(title, style: GoogleFonts.fredoka(fontSize: 18, fontWeight: FontWeight.bold, color: AdyapanTheme.textMain)),
+          const SizedBox(height: 6),
+          Text(subtitle, style: GoogleFonts.outfit(fontSize: 12, color: AdyapanTheme.textMuted), textAlign: TextAlign.center),
         ],
       ),
     );

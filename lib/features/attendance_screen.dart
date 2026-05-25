@@ -143,6 +143,11 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
               ...logs.map((log) {
                 final status = log['status'] as String;
                 final color = _getStatusColor(status);
+                final source = log['source'] as String? ?? 'Manual';
+                IconData srcIcon = Icons.edit_calendar_rounded;
+                Color srcColor = AdyapanTheme.textMuted;
+                if (source == 'Live Class') { srcIcon = Icons.videocam_rounded; srcColor = const Color(0xFFEF4444); }
+                if (source == 'Recorded Video') { srcIcon = Icons.play_circle_rounded; srcColor = const Color(0xFF8B5CF6); }
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 10.0),
                   child: Container(
@@ -166,7 +171,16 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(log['subject'] as String, style: GoogleFonts.fredoka(fontSize: 13, fontWeight: FontWeight.bold)),
-                              Text(log['time'] as String, style: GoogleFonts.outfit(fontSize: 10, color: AdyapanTheme.textSub)),
+                              const SizedBox(height: 4),
+                              Row(
+                                children: [
+                                  Icon(srcIcon, size: 11, color: srcColor),
+                                  const SizedBox(width: 4),
+                                  Text(source, style: GoogleFonts.outfit(fontSize: 10, color: srcColor, fontWeight: FontWeight.bold)),
+                                  const SizedBox(width: 8),
+                                  Text('• ${log['time']}', style: GoogleFonts.outfit(fontSize: 10, color: AdyapanTheme.textMuted)),
+                                ],
+                              ),
                             ],
                           ),
                         ),

@@ -52,7 +52,7 @@ class _RecordedClassesScreenState extends State<RecordedClassesScreen> {
                     final minutesStr = now.minute < 10 ? '0${now.minute}' : '${now.minute}';
                     final timeStr = '$hour:$minutesStr $ampm';
                     
-                    Provider.of<AppState>(context, listen: false).markAttendance(subject, 'Present', timeStr);
+                    Provider.of<AppState>(context, listen: false).markAttendance(subject, 'Present', timeStr, source: 'Recorded Video');
                     
                     // Show celebration dialog
                     _showCelebrationDialog(videoTitle);

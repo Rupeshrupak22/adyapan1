@@ -10,6 +10,8 @@ import 'notes_library_screen.dart';
 import 'live_classes_screen.dart';
 import 'recorded_classes_screen.dart';
 import 'doubt_solver_screen.dart';
+import 'progress_screen.dart';
+import 'leaderboard_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({Key? key}) : super(key: key);
@@ -42,7 +44,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         const SnackBar(content: Text('🎮 Entering Quiz and Game Arcade Arena!'), backgroundColor: AdyapanTheme.blueAccent, duration: Duration(seconds: 1)),
       );
     } else if (cardTitle == 'Progress') {
-      _showProgressDialog(context, state);
+      Navigator.push(context, MaterialPageRoute(builder: (_) => const ProgressScreen()));
     } else if (cardTitle == 'Attendance') {
       Navigator.push(context, MaterialPageRoute(builder: (_) => const AttendanceScreen()));
     } else if (cardTitle == 'Homework') {
@@ -56,7 +58,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     } else if (cardTitle == 'Doubt Sessions') {
       Navigator.push(context, MaterialPageRoute(builder: (_) => const DoubtSolverScreen()));
     } else if (cardTitle == 'Leaderboard') {
-      _showLeaderboardDialog(context, state);
+      Navigator.push(context, MaterialPageRoute(builder: (_) => const LeaderboardScreen()));
     }
   }
 
@@ -435,28 +437,30 @@ class _DashboardScreenState extends State<DashboardScreen> {
         backgroundColor: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         title: Text('📅 Attendance Tracker', style: GoogleFonts.fredoka(fontSize: 18, fontWeight: FontWeight.bold, color: AdyapanTheme.blueAccent)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('🔥 Highly Consistent!', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 12),
-            Container(
-              width: 100,
-              height: 100,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(color: AdyapanTheme.green, width: 8),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('🔥 Highly Consistent!', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 12),
+              Container(
+                width: 100,
+                height: 100,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: AdyapanTheme.green, width: 8),
+                ),
+                child: Text('94%', style: GoogleFonts.fredoka(fontSize: 22, fontWeight: FontWeight.bold, color: AdyapanTheme.green)),
               ),
-              child: Text('94%', style: GoogleFonts.fredoka(fontSize: 22, fontWeight: FontWeight.bold, color: AdyapanTheme.green)),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Attended: 118 classes\nExcused: 4 leaves\nAbsent: 3 classes',
-              style: GoogleFonts.outfit(fontSize: 13, color: AdyapanTheme.textSub, height: 1.5),
-              textAlign: TextAlign.center,
-            ),
-          ],
+              const SizedBox(height: 16),
+              Text(
+                'Attended: 118 classes\nExcused: 4 leaves\nAbsent: 3 classes',
+                style: GoogleFonts.outfit(fontSize: 13, color: AdyapanTheme.textSub, height: 1.5),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
         ),
         actions: [
           TextButton(
@@ -489,15 +493,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
               backgroundColor: Colors.white,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
               title: Text('📝 Homework Dashboard', style: GoogleFonts.fredoka(fontSize: 18, fontWeight: FontWeight.bold, color: AdyapanTheme.blueAccent)),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text('Complete to earn immediate XP and rewards!', style: GoogleFonts.outfit(fontSize: 11, color: AdyapanTheme.textMuted)),
-                  const SizedBox(height: 12),
-                  _buildHomeworkTile('📐 Math: Quadratic Equations', 'Due: Today', setDialogState, state, context),
-                  _buildHomeworkTile('⚛️ Science: Atomic Orbitals', 'Due: Tomorrow', setDialogState, state, context),
-                  _buildHomeworkTile('📖 English: Essay Writing', 'Due: 3 days', setDialogState, state, context),
-                ],
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('Complete to earn immediate XP and rewards!', style: GoogleFonts.outfit(fontSize: 11, color: AdyapanTheme.textMuted)),
+                    const SizedBox(height: 12),
+                    _buildHomeworkTile('📐 Math: Quadratic Equations', 'Due: Today', setDialogState, state, context),
+                    _buildHomeworkTile('⚛️ Science: Atomic Orbitals', 'Due: Tomorrow', setDialogState, state, context),
+                    _buildHomeworkTile('📖 English: Essay Writing', 'Due: 3 days', setDialogState, state, context),
+                  ],
+                ),
               ),
               actions: [
                 ElevatedButton(
@@ -537,9 +543,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
             IconButton(
               icon: const Icon(Icons.check_circle_outline, color: AdyapanTheme.green, size: 20),
               onPressed: () {
-                state.addXp(15);
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('🎉 Homework "$taskName" Completed! (+15 XP)'), backgroundColor: AdyapanTheme.green),
+                  SnackBar(content: Text('🎉 "$taskName" marked complete!'), backgroundColor: AdyapanTheme.green),
                 );
               },
             )
@@ -557,15 +562,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
         backgroundColor: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         title: Text('📄 Learning Library', style: GoogleFonts.fredoka(fontSize: 18, fontWeight: FontWeight.bold, color: AdyapanTheme.blueAccent)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('Download and read offline anytime.', style: GoogleFonts.outfit(fontSize: 12, color: AdyapanTheme.textSub)),
-            const SizedBox(height: 12),
-            _buildPdfTile(context, 'BODMAS_Formulas.pdf', '1.2 MB'),
-            _buildPdfTile(context, 'Atomic_Structure_Game.pdf', '3.4 MB'),
-            _buildPdfTile(context, 'Python_Syntax_CheatSheet.pdf', '0.8 MB'),
-          ],
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('Download and read offline anytime.', style: GoogleFonts.outfit(fontSize: 12, color: AdyapanTheme.textSub)),
+              const SizedBox(height: 12),
+              _buildPdfTile(context, 'BODMAS_Formulas.pdf', '1.2 MB'),
+              _buildPdfTile(context, 'Atomic_Structure_Game.pdf', '3.4 MB'),
+              _buildPdfTile(context, 'Python_Syntax_CheatSheet.pdf', '0.8 MB'),
+            ],
+          ),
         ),
         actions: [
           ElevatedButton(

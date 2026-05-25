@@ -205,9 +205,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
         imagePath: _profileImagePath,
       );
 
-      // Award profile completion bonus XP! (Only once)
-      state.addXp(30);
-
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Row(

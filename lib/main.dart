@@ -2,14 +2,18 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'core/theme.dart';
 import 'core/app_state.dart';
 import 'features/login_screen.dart';
 import 'features/app_layout.dart';
 
-void main() {
+void main() async {
   // Ensure Flutter engine bindings are initialized
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Load environment variables from .env file
+  await dotenv.load(fileName: ".env");
 
   // Force light system status bar style with white background
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(

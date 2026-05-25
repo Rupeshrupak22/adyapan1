@@ -163,9 +163,6 @@ class _FocusScreenState extends State<FocusScreen> with SingleTickerProviderStat
         _activeShieldNotifications.removeAt(index);
       });
       
-      // Award 5 Focus Points (increment xp or state)
-      Provider.of<AppState>(context, listen: false).addXp(5);
-      
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('⚡ Distraction Deflected! +5 Focus XP!'),

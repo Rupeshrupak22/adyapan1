@@ -259,7 +259,7 @@ class _LiveClassesScreenState extends State<LiveClassesScreen> {
       final minutesStr = now.minute < 10 ? '0${now.minute}' : '${now.minute}';
       final timeStr = '$hour:$minutesStr $ampm';
 
-      Provider.of<AppState>(context, listen: false).markAttendance(subject, 'Present', timeStr);
+      Provider.of<AppState>(context, listen: false).markAttendance(subject, 'Present', timeStr, source: 'Live Class');
 
       showDialog(
         context: context,

@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../core/theme.dart';
 import '../core/app_state.dart';
 import 'login_screen.dart';
+import 'app_layout.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -40,7 +41,7 @@ class _SignupScreenState extends State<SignupScreen> {
     super.dispose();
   }
 
-  void _handleSignup() {
+  void _handleSignup() async {
     final state = Provider.of<AppState>(context, listen: false);
     
     final name = _nameController.text.trim();
@@ -59,13 +60,13 @@ class _SignupScreenState extends State<SignupScreen> {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         )
       );
-      return;
     }
 
-    if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(email)) {
+    final lowerEmail = email.toLowerCase().trim();
+    if (!lowerEmail.endsWith('@gmail.com') && !lowerEmail.endsWith('@adyapan.com')) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('⚠️ Please enter a valid email address.', style: AdyapanTheme.outfit(fontWeight: FontWeight.bold, color: Colors.white)),
+          content: Text('⚠️ Email must end with @gmail.com or @adyapan.com', style: AdyapanTheme.outfit(fontWeight: FontWeight.bold, color: Colors.white)),
           backgroundColor: Colors.orange[800],
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -86,68 +87,69 @@ class _SignupScreenState extends State<SignupScreen> {
       return;
     }
 
-    // Call state registration
-    final success = state.registerUser(
-      email: email,
-      password: password,
-      name: name,
-      phone: phone,
-      className: _selectedClass,
-      school: school,
-    );
+    try {
+      // Call state registration
+      final success = await state.registerUser(
+        email: email,
+        password: password,
+        name: name,
+        phone: phone,
+        className: _selectedClass,
+        school: school,
+      );
 
-    if (!success) {
+      if (!mounted) return;
+
+      if (!success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('⚠️ This email is already registered! Please log in.', style: AdyapanTheme.outfit(fontWeight: FontWeight.bold, color: Colors.white)),
+            backgroundColor: Colors.redAccent,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          )
+        );
+        return;
+      }
+
+      // Set logged in session
+      state.login();
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('⚠️ This email is already registered! Please log in.', style: AdyapanTheme.outfit(fontWeight: FontWeight.bold, color: Colors.white)),
-          backgroundColor: Colors.redAccent,
+          content: Row(
+            children: [
+              const Text('🎉', style: TextStyle(fontSize: 16)),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Welcome $name! Account created & logged in!',
+                  style: AdyapanTheme.outfit(fontWeight: FontWeight.bold, color: Colors.white),
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: AdyapanTheme.green,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         )
       );
-      return;
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const AppLayout()),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('❌ Database Connection Failed!\n$e', style: AdyapanTheme.outfit(fontWeight: FontWeight.bold, color: Colors.white)),
+          backgroundColor: Colors.red[900],
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          duration: const Duration(seconds: 8),
+        )
+      );
     }
-
-    state.addXp(50); // Reward signup XP!
-
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        title: Text(
-          '🚀 Account Created!',
-          style: AdyapanTheme.fredoka(fontSize: 20, color: AdyapanTheme.green, fontWeight: FontWeight.bold),
-          textAlign: TextAlign.center,
-         ),
-        content: Text(
-          'Welcome $name! Your student profile has been created successfully. Please login to unlock the learning dashboard.',
-          style: AdyapanTheme.outfit(fontSize: 14, color: AdyapanTheme.textSub),
-          textAlign: TextAlign.center,
-        ),
-        actions: [
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context); // close dialog
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (_) => const LoginScreen()),
-              );
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AdyapanTheme.green,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(50)),
-              minimumSize: const Size(double.infinity, 44),
-            ),
-            child: Text(
-              'Proceed to Login',
-              style: AdyapanTheme.fredoka(color: Colors.white, fontWeight: FontWeight.bold),
-            ),
-          )
-        ],
-      ),
-    );
   }
 
   @override

@@ -39,7 +39,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     super.dispose();
   }
 
-  void _handleLogin() {
+  void _handleLogin() async {
     final state = Provider.of<AppState>(context, listen: false);
     
     final email = _emailController.text.trim().toLowerCase();
@@ -58,25 +58,117 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       return;
     }
 
-    if (state.userCredentials.containsKey(email) && state.userCredentials[email] == password) {
-      // Login successful!
-      state.login();
-      state.addXp(10); // Reward quick login XP!
+    if (!email.endsWith('@gmail.com') && !email.endsWith('@adyapan.com')) {
+      ScaffoldMessenger.of(context).clearSnackBars();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('⚠️ Email must end with @gmail.com or @adyapan.com', style: AdyapanTheme.outfit(fontWeight: FontWeight.bold, color: Colors.white)),
+          backgroundColor: Colors.orange[800],
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        )
+      );
+      return;
+    }
+
+    try {
+      final loginSuccess = await state.loginUser(email, password);
+      if (!mounted) return;
+      if (loginSuccess) {
+        // Login successful!
+        ScaffoldMessenger.of(context).clearSnackBars();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Text('✨', style: TextStyle(fontSize: 16)),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Welcome back! Login successful.',
+                    style: AdyapanTheme.outfit(fontWeight: FontWeight.bold, color: Colors.white),
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: AdyapanTheme.green,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          )
+        );
+
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const AppLayout()),
+        );
+      } else {
+        // Invalid credentials
+        ScaffoldMessenger.of(context).clearSnackBars();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('❌ Invalid Email or Password. Please register first!', style: AdyapanTheme.outfit(fontWeight: FontWeight.bold, color: Colors.white)),
+            backgroundColor: Colors.redAccent,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          )
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).clearSnackBars();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('❌ Database Connection Failed!\n$e', style: AdyapanTheme.outfit(fontWeight: FontWeight.bold, color: Colors.white)),
+          backgroundColor: Colors.red[900],
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          duration: const Duration(seconds: 8),
+        )
+      );
+    }
+  }
+
+  void _handleGoogleLogin() async {
+    final state = Provider.of<AppState>(context, listen: false);
+    
+    // Auto-login using preloaded Aarav Sharma account!
+    final googleEmail = 'aarav.sharma@gmail.com';
+    const googlePassword = 'password123';
+    
+    _emailController.text = googleEmail;
+    _passwordController.text = googlePassword;
+    
+    try {
+      // Auto-register google account if it doesn't exist yet!
+      if (!state.userCredentials.containsKey(googleEmail)) {
+        await state.registerUser(
+          email: googleEmail,
+          password: googlePassword,
+          name: 'Aarav Sharma',
+          phone: '9876543210',
+          className: 'Class 10',
+          school: 'Adyapan Public School',
+        );
+      }
+      
+      await state.loginUser(googleEmail, googlePassword);
+      if (!mounted) return;
       
       ScaffoldMessenger.of(context).clearSnackBars();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Row(
             children: [
-              const Text('✨', style: TextStyle(fontSize: 16)),
+              const Text('🚀', style: TextStyle(fontSize: 16)),
               const SizedBox(width: 8),
-              Text(
-                'Welcome back! Login successful.',
-                style: AdyapanTheme.outfit(fontWeight: FontWeight.bold, color: Colors.white),
+              Expanded(
+                child: Text(
+                  'Google Quick-Login successful! Welcome, Aarav.',
+                  style: AdyapanTheme.outfit(fontWeight: FontWeight.bold, color: Colors.white),
+                ),
               ),
             ],
           ),
-          backgroundColor: AdyapanTheme.green,
+          backgroundColor: AdyapanTheme.blueAccent,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         )
@@ -86,53 +178,18 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
         context,
         MaterialPageRoute(builder: (_) => const AppLayout()),
       );
-    } else {
-      // Invalid credentials
+    } catch (e) {
       ScaffoldMessenger.of(context).clearSnackBars();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('❌ Invalid Email or Password. Please register first!', style: AdyapanTheme.outfit(fontWeight: FontWeight.bold, color: Colors.white)),
-          backgroundColor: Colors.redAccent,
+          content: Text('❌ Database Connection Failed!\n$e', style: AdyapanTheme.outfit(fontWeight: FontWeight.bold, color: Colors.white)),
+          backgroundColor: Colors.red[900],
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          duration: const Duration(seconds: 8),
         )
       );
     }
-  }
-
-  void _handleGoogleLogin() {
-    final state = Provider.of<AppState>(context, listen: false);
-    
-    // Auto-login using preloaded Aarav Sharma account!
-    _emailController.text = 'aarav.sharma@school.com';
-    _passwordController.text = 'password123';
-    
-    state.login();
-    state.addXp(10);
-    
-    ScaffoldMessenger.of(context).clearSnackBars();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            const Text('🚀', style: TextStyle(fontSize: 16)),
-            const SizedBox(width: 8),
-            Text(
-              'Google Quick-Login successful! Welcome, Aarav.',
-              style: AdyapanTheme.outfit(fontWeight: FontWeight.bold, color: Colors.white),
-            ),
-          ],
-        ),
-        backgroundColor: AdyapanTheme.blueAccent,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      )
-    );
-
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (_) => const AppLayout()),
-    );
   }
 
   @override
