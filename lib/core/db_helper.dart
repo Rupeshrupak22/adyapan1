@@ -138,17 +138,35 @@ class DbHelper {
         return false; // Email already in database!
       }
 
-      // Insert new user using named parameters
+      final userId = 'usr_${DateTime.now().millisecondsSinceEpoch}';
+
+      // Insert new user using named parameters and schema compatibility
       await conn.execute('''
-        INSERT INTO users (name, email, phone, class_name, school, password)
-        VALUES (:name, :email, :phone, :className, :school, :password);
+        INSERT INTO users (
+          id, name, email, phone, 
+          class_name, class_level, 
+          school, school_name, 
+          password, password_hash, 
+          role, otp_verified, signup_source
+        )
+        VALUES (
+          :id, :name, :email, :phone, 
+          :className, :className, 
+          :school, :school, 
+          :password, :password, 
+          :role, :otpVerified, :signupSource
+        );
       ''', {
+        'id': userId,
         'name': name,
         'email': cleanEmail,
         'phone': phone,
         'className': className,
         'school': school,
         'password': password,
+        'role': 'student',
+        'otpVerified': 1,
+        'signupSource': 'flutter',
       });
 
       return true;
@@ -189,7 +207,7 @@ class DbHelper {
       final results = await conn.execute('''
         SELECT name, email, phone, class_name, school
         FROM users
-        WHERE LOWER(email) = :email AND password = :password;
+        WHERE LOWER(email) = :email AND (password = :password OR password_hash = :password);
       ''', {
         'email': cleanEmail,
         'password': password,
@@ -199,17 +217,34 @@ class DbHelper {
         // If direct DB has no user but API successfully logged them in, sync user details from API to DB!
         if (apiUser != null) {
           try {
+            final userId = 'usr_${DateTime.now().millisecondsSinceEpoch}';
             await conn.execute('''
-              INSERT INTO users (name, email, phone, class_name, school, password)
-              VALUES (:name, :email, :phone, :className, :school, :password)
+              INSERT INTO users (
+                id, name, email, phone, 
+                class_name, class_level, 
+                school, school_name, 
+                password, password_hash, 
+                role, otp_verified, signup_source
+              )
+              VALUES (
+                :id, :name, :email, :phone, 
+                :className, :className, 
+                :school, :school, 
+                :password, :password, 
+                :role, :otpVerified, :signupSource
+              )
               ON DUPLICATE KEY UPDATE name = :name;
             ''', {
+              'id': userId,
               'name': apiUser['name'],
               'email': cleanEmail,
               'phone': apiUser['phone'],
               'className': apiUser['className'],
               'school': apiUser['school'],
               'password': password,
+              'role': 'student',
+              'otpVerified': 1,
+              'signupSource': 'flutter',
             });
           } catch (e) {
             print('⚠️ Auto-sync API user to local DB failed: $e');
