@@ -1,10 +1,18 @@
 import 'dart:convert';
+import 'dart:math';
 import 'package:mysql_client/mysql_client.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 
 class DbHelper {
   static MySQLConnection? _conn;
+  static final Random _random = Random.secure();
+
+  static String _newId(String prefix) {
+    final timestamp = DateTime.now().microsecondsSinceEpoch;
+    final suffix = _random.nextInt(0x7fffffff).toRadixString(16);
+    return '${prefix}_${timestamp}_$suffix';
+  }
 
   // Establish a new connection or return the existing live connection
   static Future<MySQLConnection> getConnection() async {
@@ -51,7 +59,7 @@ class DbHelper {
     try {
       await _conn!.execute('''
         CREATE TABLE IF NOT EXISTS users (
-          id INT AUTO_INCREMENT PRIMARY KEY,
+          id VARCHAR(64) PRIMARY KEY,
           name VARCHAR(255) NOT NULL,
           email VARCHAR(255) NOT NULL UNIQUE,
           phone VARCHAR(50) NOT NULL,
@@ -59,6 +67,24 @@ class DbHelper {
           school VARCHAR(255) NOT NULL,
           password VARCHAR(255) NOT NULL,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+      ''');
+      await _conn!.execute('''
+        CREATE TABLE IF NOT EXISTS login_events (
+          id VARCHAR(64) PRIMARY KEY,
+          user_id VARCHAR(64) NOT NULL,
+          name VARCHAR(160),
+          email VARCHAR(190) NOT NULL,
+          role VARCHAR(30),
+          source VARCHAR(40) NOT NULL DEFAULT 'unknown',
+          status VARCHAR(40) NOT NULL DEFAULT 'success',
+          ip_address VARCHAR(80),
+          user_agent TEXT,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          INDEX idx_login_events_user_id (user_id),
+          INDEX idx_login_events_email (email),
+          INDEX idx_login_events_source (source),
+          INDEX idx_login_events_created_at (created_at)
         );
       ''');
     } catch (e) {
@@ -81,7 +107,10 @@ class DbHelper {
         final response = await http.post(
           url,
           headers: {'Content-Type': 'application/json'},
-          body: jsonEncode(body),
+          body: jsonEncode({
+            ...body,
+            'clientType': 'mobile',
+          }),
         ).timeout(const Duration(seconds: 4));
         
         print('📡 Auth API response status: ${response.statusCode}');
@@ -123,7 +152,10 @@ class DbHelper {
         'role': role,
         'teacher_id': teacherId,
       };
-      await callAuthApi(path: '/api/auth/signup', body: body);
+      final apiResponse = await callAuthApi(path: '/api/auth/signup', body: body);
+      if (apiResponse != null) {
+        return true;
+      }
     } catch (e) {
       print('⚠️ REST API signup sync failed, but proceeding with direct DB: $e');
     }
@@ -142,7 +174,9 @@ class DbHelper {
         return false; // Email already in database!
       }
 
-      final userId = role == 'teacher' ? (teacherId ?? 'tch_${DateTime.now().millisecondsSinceEpoch}') : 'usr_${DateTime.now().millisecondsSinceEpoch}';
+      final userId = role == 'teacher' 
+          ? (teacherId ?? _newId('tch')) 
+          : _newId('usr');
 
       // Insert new user using named parameters and schema compatibility
       await conn.execute('''
@@ -212,7 +246,7 @@ class DbHelper {
     try {
       final conn = await getConnection();
       final results = await conn.execute('''
-        SELECT name, email, phone, class_name, school, role, teacher_id
+        SELECT id, name, email, phone, class_name, school, role, teacher_id
         FROM users
         WHERE LOWER(email) = :email AND (password = :password OR password_hash = :password);
       ''', {
@@ -224,7 +258,9 @@ class DbHelper {
         // If direct DB has no user but API successfully logged them in, sync user details from API to DB!
         if (apiUser != null) {
           try {
-            final userId = apiUser['role'] == 'teacher' ? (apiUser['teacher_id'] != '' ? apiUser['teacher_id'] : 'tch_${DateTime.now().millisecondsSinceEpoch}') : 'usr_${DateTime.now().millisecondsSinceEpoch}';
+            final userId = apiUser['role'] == 'teacher' 
+                ? (apiUser['teacher_id'] != null && apiUser['teacher_id'].toString().isNotEmpty ? apiUser['teacher_id'].toString() : _newId('tch')) 
+                : _newId('usr');
             await conn.execute('''
               INSERT INTO users (
                 id, name, email, phone, 
@@ -263,6 +299,24 @@ class DbHelper {
       }
 
       final row = results.rows.first.assoc();
+      try {
+        await conn.execute('''
+          INSERT INTO login_events (id, user_id, name, email, role, source, status, user_agent)
+          VALUES (:id, :userId, :name, :email, :role, :source, :status, :userAgent);
+        ''', {
+          'id': _newId('mobile_login'),
+          'userId': row['id'] ?? '',
+          'name': row['name'] ?? '',
+          'email': row['email'] ?? cleanEmail,
+          'role': 'student',
+          'source': 'mobile',
+          'status': 'success',
+          'userAgent': 'flutter',
+        });
+      } catch (e) {
+        print('⚠️ Mobile login event insert failed: $e');
+      }
+
       return {
         'name': row['name'] ?? '',
         'email': row['email'] ?? '',

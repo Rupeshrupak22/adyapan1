@@ -19,6 +19,10 @@ function mapUser(row) {
   };
 }
 
+function isBcryptHash(value) {
+  return /^\$2[aby]\$\d{2}\$/.test(String(value || ''));
+}
+
 function detectClientType(req) {
   const explicitType = String(req.body.clientType || req.body.platform || '').trim().toLowerCase();
   if (['mobile', 'web'].includes(explicitType)) return explicitType;
@@ -118,12 +122,29 @@ async function login(req, res, next) {
     }
 
     const user = rows[0];
-    const isPasswordValid = await bcrypt.compare(req.body.password, user.password);
+    const storedPassword = String(user.password || '');
+    const submittedPassword = String(req.body.password || '');
+    let isPasswordValid = false;
+    let shouldUpgradePassword = false;
+
+    if (isBcryptHash(storedPassword)) {
+      isPasswordValid = await bcrypt.compare(submittedPassword, storedPassword);
+    } else if (storedPassword && storedPassword === submittedPassword) {
+      isPasswordValid = true;
+      shouldUpgradePassword = true;
+    }
+
     if (!isPasswordValid) {
       return res.status(401).json({
         success: false,
         message: 'Invalid email or password',
       });
+    }
+
+    if (shouldUpgradePassword) {
+      const passwordHash = await bcrypt.hash(submittedPassword, 12);
+      await getPool().execute('UPDATE users SET password = ? WHERE id = ?;', [passwordHash, user.id]);
+      user.password = passwordHash;
     }
 
     const clientType = detectClientType(req);
