@@ -75,6 +75,12 @@ void main() async {
       print('✅ Added "school" column successfully!');
     }
 
+    if (!columns.contains('teacher_id')) {
+      print('\n🔧 Column "teacher_id" is missing! Altering table to add it...');
+      await conn.execute('ALTER TABLE users ADD COLUMN teacher_id VARCHAR(64) NULL;');
+      print('✅ Added "teacher_id" column successfully!');
+    }
+
     print('\n✅ Final users table verification:');
     final finalDescribeRes = await conn.execute('DESCRIBE users;');
     for (final row in finalDescribeRes.rows) {

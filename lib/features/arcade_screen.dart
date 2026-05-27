@@ -336,14 +336,28 @@ class _ArcadeScreenState extends State<ArcadeScreen> with SingleTickerProviderSt
 
   // QUIZ ARENA SUB-WIDGET WITH CUSTOM PROGRESS INDICATORS & ADMIN CONTROL PANEL
   Widget _buildQuizArena() {
-    var q = _quizQuestions[_currentQuizIdx];
+    final state = Provider.of<AppState>(context);
+    final activeQuestions = [
+      ..._quizQuestions,
+      ...state.customQuizQuestions.map((q) => {
+        'question': q['question'],
+        'options': List<String>.from(q['options']),
+        'correctIdx': q['correctOptionIndex'],
+      })
+    ];
+
+    if (_currentQuizIdx >= activeQuestions.length) {
+      _currentQuizIdx = 0; // safe clamp
+    }
+
+    var q = activeQuestions[_currentQuizIdx];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text('Question ${_currentQuizIdx + 1}/${_quizQuestions.length}', style: AdyapanTheme.fredoka(fontSize: 14, color: AdyapanTheme.blueAccent, fontWeight: FontWeight.bold)),
+            Text('Question ${_currentQuizIdx + 1}/${activeQuestions.length}', style: AdyapanTheme.fredoka(fontSize: 14, color: AdyapanTheme.blueAccent, fontWeight: FontWeight.bold)),
             Text('Score: $_quizScore XP', style: AdyapanTheme.fredoka(fontSize: 14, color: AdyapanTheme.green, fontWeight: FontWeight.bold)),
           ],
         ),
@@ -352,7 +366,7 @@ class _ArcadeScreenState extends State<ArcadeScreen> with SingleTickerProviderSt
         ClipRRect(
           borderRadius: BorderRadius.circular(10),
           child: LinearProgressIndicator(
-            value: (_currentQuizIdx + 1) / _quizQuestions.length,
+            value: (_currentQuizIdx + 1) / activeQuestions.length,
             minHeight: 6,
             backgroundColor: const Color(0xFFF1F5F9),
             valueColor: const AlwaysStoppedAnimation<Color>(AdyapanTheme.blueAccent),
@@ -450,7 +464,7 @@ class _ArcadeScreenState extends State<ArcadeScreen> with SingleTickerProviderSt
           ElevatedButton(
             onPressed: () {
               setState(() {
-                if (_currentQuizIdx + 1 < _quizQuestions.length) {
+                if (_currentQuizIdx + 1 < activeQuestions.length) {
                   _currentQuizIdx++;
                   _selectedAnswerIdx = null;
                   _quizAnswered = false;
@@ -469,7 +483,7 @@ class _ArcadeScreenState extends State<ArcadeScreen> with SingleTickerProviderSt
               minimumSize: const Size(double.infinity, 50),
             ),
             child: Text(
-              _currentQuizIdx + 1 < _quizQuestions.length ? 'Next Question' : 'Restart Quiz Arena',
+              _currentQuizIdx + 1 < activeQuestions.length ? 'Next Question' : 'Restart Quiz Arena',
               style: AdyapanTheme.fredoka(color: Colors.white, fontWeight: FontWeight.bold),
             ),
           )

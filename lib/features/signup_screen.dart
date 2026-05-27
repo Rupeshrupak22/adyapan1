@@ -7,6 +7,7 @@ import '../core/theme.dart';
 import '../core/app_state.dart';
 import 'login_screen.dart';
 import 'app_layout.dart';
+import 'teacher_dashboard_screen.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -29,6 +30,8 @@ class _SignupScreenState extends State<SignupScreen> {
   String _selectedClass = 'Class 1';
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
+  String _userRole = 'student'; // 'student' or 'teacher'
+  final _teacherIdController = TextEditingController();
 
   @override
   void dispose() {
@@ -38,6 +41,7 @@ class _SignupScreenState extends State<SignupScreen> {
     _schoolController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
+    _teacherIdController.dispose();
     super.dispose();
   }
 
@@ -50,6 +54,7 @@ class _SignupScreenState extends State<SignupScreen> {
     final school = _schoolController.text.trim();
     final password = _passwordController.text;
     final confirmPassword = _confirmPasswordController.text;
+    final teacherId = _teacherIdController.text.trim();
 
     if (name.isEmpty || phone.isEmpty || email.isEmpty || school.isEmpty || password.isEmpty || confirmPassword.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -60,6 +65,19 @@ class _SignupScreenState extends State<SignupScreen> {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         )
       );
+      return;
+    }
+
+    if (_userRole == 'teacher' && teacherId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('⚠️ Please enter a unique Teacher UID to register!', style: AdyapanTheme.outfit(fontWeight: FontWeight.bold, color: Colors.white)),
+          backgroundColor: Colors.orange[800],
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        )
+      );
+      return;
     }
 
     final lowerEmail = email.toLowerCase().trim();
@@ -94,8 +112,10 @@ class _SignupScreenState extends State<SignupScreen> {
         password: password,
         name: name,
         phone: phone,
-        className: _selectedClass,
+        className: _userRole == 'teacher' ? 'Educator' : _selectedClass,
         school: school,
+        role: _userRole,
+        teacherId: teacherId.isNotEmpty ? teacherId : null,
       );
 
       if (!mounted) return;
@@ -123,7 +143,9 @@ class _SignupScreenState extends State<SignupScreen> {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'Welcome $name! Account created & logged in!',
+                  _userRole == 'teacher'
+                      ? 'Welcome Educator $name! Dashboard unlocked!'
+                      : 'Welcome $name! Account created & logged in!',
                   style: AdyapanTheme.outfit(fontWeight: FontWeight.bold, color: Colors.white),
                 ),
               ),
@@ -135,10 +157,17 @@ class _SignupScreenState extends State<SignupScreen> {
         )
       );
 
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const AppLayout()),
-      );
+      if (_userRole == 'teacher') {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const TeacherDashboardScreen()),
+        );
+      } else {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const AppLayout()),
+        );
+      }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -384,13 +413,94 @@ class _SignupScreenState extends State<SignupScreen> {
                           
                           SizedBox(height: cardContentSpacing * 1.2),
 
-                          // INPUT ROW 1: Student Name & Phone
+                          // ROLE SELECTOR TOGGLE (Student vs Teacher)
+                          Container(
+                            height: 36,
+                            padding: const EdgeInsets.all(2),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF1F5F9),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: GestureDetector(
+                                    onTap: () {
+                                      setState(() {
+                                        _userRole = 'student';
+                                      });
+                                    },
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                        color: _userRole == 'student' ? Colors.white : Colors.transparent,
+                                        borderRadius: BorderRadius.circular(8),
+                                        boxShadow: _userRole == 'student'
+                                            ? [
+                                                BoxShadow(
+                                                  color: Colors.black.withOpacity(0.05),
+                                                  blurRadius: 4,
+                                                  offset: const Offset(0, 2),
+                                                )
+                                              ]
+                                            : null,
+                                      ),
+                                      alignment: Alignment.center,
+                                      child: Text(
+                                        'Student 🎓',
+                                        style: GoogleFonts.outfit(
+                                          fontSize: 11.5,
+                                          fontWeight: FontWeight.bold,
+                                          color: _userRole == 'student' ? const Color(0xFF0F172A) : const Color(0xFF64748B),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                Expanded(
+                                  child: GestureDetector(
+                                    onTap: () {
+                                      setState(() {
+                                        _userRole = 'teacher';
+                                      });
+                                    },
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                        color: _userRole == 'teacher' ? Colors.white : Colors.transparent,
+                                        borderRadius: BorderRadius.circular(8),
+                                        boxShadow: _userRole == 'teacher'
+                                            ? [
+                                                BoxShadow(
+                                                  color: Colors.black.withOpacity(0.05),
+                                                  blurRadius: 4,
+                                                  offset: const Offset(0, 2),
+                                                )
+                                              ]
+                                            : null,
+                                      ),
+                                      alignment: Alignment.center,
+                                      child: Text(
+                                        'Teacher 🍎',
+                                        style: GoogleFonts.outfit(
+                                          fontSize: 11.5,
+                                          fontWeight: FontWeight.bold,
+                                          color: _userRole == 'teacher' ? const Color(0xFF0F172A) : const Color(0xFF64748B),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          SizedBox(height: cardContentSpacing * 1.2),
+
+                          // INPUT ROW 1: Student/Teacher Name & Phone
                           Row(
                             children: [
                               Expanded(
                                 child: _buildInputField(
                                   controller: _nameController,
-                                  hint: 'Student name',
+                                  hint: _userRole == 'student' ? 'Student name' : 'Teacher name',
                                   icon: Icons.person_outline_rounded,
                                 ),
                               ),
@@ -411,61 +521,74 @@ class _SignupScreenState extends State<SignupScreen> {
                           Row(
                             children: [
                               Expanded(
+                                flex: _userRole == 'student' ? 1 : 2,
                                 child: _buildInputField(
                                   controller: _emailController,
-                                  hint: 'Email',
+                                  hint: _userRole == 'student' ? 'Email' : 'Teacher email',
                                   icon: Icons.mail_outline_rounded,
                                   keyboardType: TextInputType.emailAddress,
                                 ),
                               ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Container(
-                                  height: 38,
-                                  padding: const EdgeInsets.symmetric(horizontal: 10),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    border: Border.all(color: const Color(0xFFE2E8F0)),
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                  child: DropdownButtonHideUnderline(
-                                    child: DropdownButton<String>(
-                                      value: _selectedClass,
-                                      icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFF94A3B8), size: 18),
-                                      style: GoogleFonts.outfit(fontSize: 11.5, color: const Color(0xFF0F172A), fontWeight: FontWeight.w600),
-                                      onChanged: (String? newValue) {
-                                        setState(() {
-                                          _selectedClass = newValue!;
-                                        });
-                                      },
-                                      items: <String>[
-                                        'Class 1',
-                                        'Class 2',
-                                        'Class 3',
-                                        'Class 4',
-                                        'Class 5',
-                                        'Class 6',
-                                        'Class 7',
-                                        'Class 8',
-                                        'Class 9',
-                                        'Class 10'
-                                      ].map<DropdownMenuItem<String>>((String value) {
-                                        return DropdownMenuItem<String>(
-                                          value: value,
-                                          child: Row(
-                                            children: [
-                                              const Icon(Icons.school_outlined, size: 14, color: Color(0xFF94A3B8)),
-                                              const SizedBox(width: 6),
-                                              Text(value),
-                                            ],
-                                          ),
-                                        );
-                                      }).toList(),
+                              if (_userRole == 'student') ...[
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Container(
+                                    height: 38,
+                                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: DropdownButtonHideUnderline(
+                                      child: DropdownButton<String>(
+                                        value: _selectedClass,
+                                        icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFF94A3B8), size: 18),
+                                        style: GoogleFonts.outfit(fontSize: 11.5, color: const Color(0xFF0F172A), fontWeight: FontWeight.w600),
+                                        onChanged: (String? newValue) {
+                                          setState(() {
+                                            _selectedClass = newValue!;
+                                          });
+                                        },
+                                        items: <String>[
+                                          'Class 1',
+                                          'Class 2',
+                                          'Class 3',
+                                          'Class 4',
+                                          'Class 5',
+                                          'Class 6',
+                                          'Class 7',
+                                          'Class 8',
+                                          'Class 9',
+                                          'Class 10'
+                                        ].map<DropdownMenuItem<String>>((String value) {
+                                          return DropdownMenuItem<String>(
+                                            value: value,
+                                            child: Row(
+                                              children: [
+                                                const Icon(Icons.school_outlined, size: 14, color: Color(0xFF94A3B8)),
+                                                const SizedBox(width: 6),
+                                                Text(value),
+                                              ],
+                                            ),
+                                          );
+                                        }).toList(),
+                                      ),
                                     ),
                                   ),
                                 ),
-                              ),
+                              ],
                             ],
+                          ),
+                          SizedBox(height: cardContentSpacing),
+
+                          // NEW INPUT ROW: Teacher UID field
+                          _buildInputField(
+                            controller: _teacherIdController,
+                            hint: _userRole == 'student' 
+                                ? 'Teacher UID (Optional, e.g. TCH-123)' 
+                                : 'Create custom Teacher UID (Compulsory, e.g. TCH-999)',
+                            icon: Icons.vpn_key_outlined,
                           ),
                           SizedBox(height: cardContentSpacing),
 

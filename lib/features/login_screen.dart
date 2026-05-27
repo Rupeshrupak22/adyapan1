@@ -6,6 +6,7 @@ import '../core/theme.dart';
 import '../core/app_state.dart';
 import 'app_layout.dart';
 import 'signup_screen.dart';
+import 'teacher_dashboard_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({Key? key}) : super(key: key);
@@ -20,6 +21,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
   late AnimationController _animationController;
+  String _userRole = 'student'; // 'student' or 'teacher'
 
   @override
   void initState() {
@@ -85,7 +87,9 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Welcome back! Login successful.',
+                    state.userRole == 'teacher'
+                        ? 'Welcome back Educator! Login successful.'
+                        : 'Welcome back Student! Login successful.',
                     style: AdyapanTheme.outfit(fontWeight: FontWeight.bold, color: Colors.white),
                   ),
                 ),
@@ -97,10 +101,17 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
           )
         );
 
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const AppLayout()),
-        );
+        if (state.userRole == 'teacher') {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const TeacherDashboardScreen()),
+          );
+        } else {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const AppLayout()),
+          );
+        }
       } else {
         // Invalid credentials
         ScaffoldMessenger.of(context).clearSnackBars();
@@ -370,13 +381,96 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                           ),
                           const SizedBox(height: 6),
                           Text(
-                            'Continue learning with your future skills dashboard.',
+                            _userRole == 'student'
+                                ? 'Continue learning with your future skills dashboard.'
+                                : 'Manage your students, assignments, and class standings.',
                             style: GoogleFonts.outfit(
                               fontSize: 12, 
                               color: const Color(0xFF64748B),
                               fontWeight: FontWeight.w500,
                             ),
                             textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 24),
+
+                          // ROLE SELECTOR TOGGLE (Student vs Teacher)
+                          Container(
+                            height: 40,
+                            padding: const EdgeInsets.all(2),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF1F5F9),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: GestureDetector(
+                                    onTap: () {
+                                      setState(() {
+                                        _userRole = 'student';
+                                      });
+                                    },
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                        color: _userRole == 'student' ? Colors.white : Colors.transparent,
+                                        borderRadius: BorderRadius.circular(10),
+                                        boxShadow: _userRole == 'student'
+                                            ? [
+                                                BoxShadow(
+                                                  color: Colors.black.withOpacity(0.05),
+                                                  blurRadius: 4,
+                                                  offset: const Offset(0, 2),
+                                                )
+                                              ]
+                                            : null,
+                                      ),
+                                      alignment: Alignment.center,
+                                      child: Text(
+                                        'Student 🎓',
+                                        style: GoogleFonts.outfit(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.bold,
+                                          color: _userRole == 'student' ? const Color(0xFF0F172A) : const Color(0xFF64748B),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                Expanded(
+                                  child: GestureDetector(
+                                    onTap: () {
+                                      setState(() {
+                                        _userRole = 'teacher';
+                                      });
+                                    },
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                        color: _userRole == 'teacher' ? Colors.white : Colors.transparent,
+                                        borderRadius: BorderRadius.circular(10),
+                                        boxShadow: _userRole == 'teacher'
+                                            ? [
+                                                BoxShadow(
+                                                  color: Colors.black.withOpacity(0.05),
+                                                  blurRadius: 4,
+                                                  offset: const Offset(0, 2),
+                                                )
+                                              ]
+                                            : null,
+                                      ),
+                                      alignment: Alignment.center,
+                                      child: Text(
+                                        'Teacher 🍎',
+                                        style: GoogleFonts.outfit(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.bold,
+                                          color: _userRole == 'teacher' ? const Color(0xFF0F172A) : const Color(0xFF64748B),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                           const SizedBox(height: 24),
 
@@ -397,7 +491,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                           ),
                           _buildField(
                             controller: _emailController,
-                            hint: 'student@example.com',
+                            hint: _userRole == 'student' ? 'student@example.com' : 'teacher@example.com',
                             icon: Icons.mail_outline_rounded,
                             keyboardType: TextInputType.emailAddress,
                           ),

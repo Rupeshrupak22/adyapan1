@@ -105,10 +105,12 @@ class DbHelper {
     required String className,
     required String school,
     required String password,
+    required String role,
+    String? teacherId,
   }) async {
     final cleanEmail = email.toLowerCase().trim();
 
-    // 1. Sync in Next.js backend API
+    // 1. Sync in Next.js backend API (Only student role for Next.js, or try for both)
     try {
       final body = {
         'name': name,
@@ -118,6 +120,8 @@ class DbHelper {
         'class_name': className,
         'school': school,
         'password': password,
+        'role': role,
+        'teacher_id': teacherId,
       };
       await callAuthApi(path: '/api/auth/signup', body: body);
     } catch (e) {
@@ -138,7 +142,7 @@ class DbHelper {
         return false; // Email already in database!
       }
 
-      final userId = 'usr_${DateTime.now().millisecondsSinceEpoch}';
+      final userId = role == 'teacher' ? (teacherId ?? 'tch_${DateTime.now().millisecondsSinceEpoch}') : 'usr_${DateTime.now().millisecondsSinceEpoch}';
 
       // Insert new user using named parameters and schema compatibility
       await conn.execute('''
@@ -147,14 +151,14 @@ class DbHelper {
           class_name, class_level, 
           school, school_name, 
           password, password_hash, 
-          role, otp_verified, signup_source
+          role, otp_verified, signup_source, teacher_id
         )
         VALUES (
           :id, :name, :email, :phone, 
           :className, :className, 
           :school, :school, 
           :password, :password, 
-          :role, :otpVerified, :signupSource
+          :role, :otpVerified, :signupSource, :teacherId
         );
       ''', {
         'id': userId,
@@ -164,9 +168,10 @@ class DbHelper {
         'className': className,
         'school': school,
         'password': password,
-        'role': 'student',
+        'role': role,
         'otpVerified': 1,
         'signupSource': 'flutter',
+        'teacherId': role == 'teacher' ? userId : teacherId, // For teachers, teacherId is their own ID!
       });
 
       return true;
@@ -195,6 +200,8 @@ class DbHelper {
           'phone': userObj['phone'] ?? '',
           'className': userObj['className'] ?? userObj['class_name'] ?? '',
           'school': userObj['school'] ?? '',
+          'role': userObj['role'] ?? 'student',
+          'teacher_id': userObj['teacher_id'] ?? '',
         };
       }
     } catch (e) {
@@ -205,7 +212,7 @@ class DbHelper {
     try {
       final conn = await getConnection();
       final results = await conn.execute('''
-        SELECT name, email, phone, class_name, school
+        SELECT name, email, phone, class_name, school, role, teacher_id
         FROM users
         WHERE LOWER(email) = :email AND (password = :password OR password_hash = :password);
       ''', {
@@ -217,21 +224,21 @@ class DbHelper {
         // If direct DB has no user but API successfully logged them in, sync user details from API to DB!
         if (apiUser != null) {
           try {
-            final userId = 'usr_${DateTime.now().millisecondsSinceEpoch}';
+            final userId = apiUser['role'] == 'teacher' ? (apiUser['teacher_id'] != '' ? apiUser['teacher_id'] : 'tch_${DateTime.now().millisecondsSinceEpoch}') : 'usr_${DateTime.now().millisecondsSinceEpoch}';
             await conn.execute('''
               INSERT INTO users (
                 id, name, email, phone, 
                 class_name, class_level, 
                 school, school_name, 
                 password, password_hash, 
-                role, otp_verified, signup_source
+                role, otp_verified, signup_source, teacher_id
               )
               VALUES (
                 :id, :name, :email, :phone, 
                 :className, :className, 
                 :school, :school, 
                 :password, :password, 
-                :role, :otpVerified, :signupSource
+                :role, :otpVerified, :signupSource, :teacherId
               )
               ON DUPLICATE KEY UPDATE name = :name;
             ''', {
@@ -242,9 +249,10 @@ class DbHelper {
               'className': apiUser['className'],
               'school': apiUser['school'],
               'password': password,
-              'role': 'student',
+              'role': apiUser['role'] ?? 'student',
               'otpVerified': 1,
               'signupSource': 'flutter',
+              'teacherId': apiUser['role'] == 'teacher' ? userId : (apiUser['teacher_id'] ?? ''),
             });
           } catch (e) {
             print('⚠️ Auto-sync API user to local DB failed: $e');
@@ -261,6 +269,8 @@ class DbHelper {
         'phone': row['phone'] ?? '',
         'className': row['class_name'] ?? '',
         'school': row['school'] ?? '',
+        'role': row['role'] ?? 'student',
+        'teacher_id': row['teacher_id'] ?? '',
       };
     } catch (e) {
       print('❌ Direct database login failed: $e');
@@ -269,6 +279,36 @@ class DbHelper {
         return apiUser;
       }
       rethrow;
+    }
+  }
+
+  // Fetch list of students linked to a specific teacher
+  static Future<List<Map<String, dynamic>>> getLinkedStudents(String teacherId) async {
+    try {
+      final conn = await getConnection();
+      final results = await conn.execute('''
+        SELECT name, email, phone, class_name, school, created_at
+        FROM users
+        WHERE role = 'student' AND teacher_id = :teacherId
+        ORDER BY name ASC;
+      ''', {'teacherId': teacherId});
+
+      final list = <Map<String, dynamic>>[];
+      for (final row in results.rows) {
+        final assoc = row.assoc();
+        list.add({
+          'name': assoc['name'] ?? '',
+          'email': assoc['email'] ?? '',
+          'phone': assoc['phone'] ?? '',
+          'className': assoc['class_name'] ?? '',
+          'school': assoc['school'] ?? '',
+          'createdAt': assoc['created_at'] ?? '',
+        });
+      }
+      return list;
+    } catch (e) {
+      print('❌ Failed to fetch linked students: $e');
+      return [];
     }
   }
 }

@@ -7,6 +7,7 @@ import 'core/theme.dart';
 import 'core/app_state.dart';
 import 'features/login_screen.dart';
 import 'features/app_layout.dart';
+import 'features/teacher_dashboard_screen.dart';
 
 void main() async {
   // Ensure Flutter engine bindings are initialized
@@ -67,6 +68,9 @@ class AdyapanApp extends StatelessWidget {
             );
           }
           if (state.isLoggedIn) {
+            if (state.userRole == 'teacher') {
+              return const TeacherDashboardScreen();
+            }
             return const AppLayout();
           }
           return const LoginScreen();

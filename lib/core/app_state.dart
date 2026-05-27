@@ -83,6 +83,18 @@ class AppState extends ChangeNotifier {
   bool _isLoggedIn = false;
   bool get isLoggedIn => _isLoggedIn;
 
+  String _userRole = 'student';
+  String get userRole => _userRole;
+
+  String _teacherId = '';
+  String get teacherId => _teacherId;
+
+  List<Map<String, dynamic>> _linkedStudents = [];
+  List<Map<String, dynamic>> get linkedStudents => _linkedStudents;
+
+  List<Map<String, dynamic>> _customQuizQuestions = [];
+  List<Map<String, dynamic>> get customQuizQuestions => _customQuizQuestions;
+
   Map<String, String> _userCredentials = {};
   Map<String, String> get userCredentials => _userCredentials;
 
@@ -195,6 +207,12 @@ class AppState extends ChangeNotifier {
 
     // Load Auth Database & Session
     _isLoggedIn = _prefs.getBool('is_logged_in') ?? false;
+    _userRole = _prefs.getString('user_role') ?? 'student';
+    _teacherId = _prefs.getString('teacher_id') ?? '';
+    final customQsJson = _prefs.getString('custom_quiz_questions');
+    if (customQsJson != null) {
+      _customQuizQuestions = List<Map<String, dynamic>>.from(jsonDecode(customQsJson));
+    }
     final credsJson = _prefs.getString('user_credentials');
     if (credsJson != null) {
       _userCredentials = Map<String, String>.from(jsonDecode(credsJson));
@@ -510,16 +528,25 @@ class AppState extends ChangeNotifier {
       _studentClass = user['className'];
       _studentSchool = user['school'];
       
+      _userRole = user['role'] ?? 'student';
+      _teacherId = user['teacher_id'] ?? '';
+      
       _prefs.setString('student_name', _studentName);
       _prefs.setString('student_email', _studentEmail);
       _prefs.setString('student_phone', _studentPhone);
       _prefs.setString('student_class', _studentClass);
       _prefs.setString('student_school', _studentSchool);
+      _prefs.setString('user_role', _userRole);
+      _prefs.setString('teacher_id', _teacherId);
       
       _isLoggedIn = true;
       _prefs.setBool('is_logged_in', true);
-      notifyListeners();
       
+      if (_userRole == 'teacher') {
+        await fetchLinkedStudents();
+      }
+      
+      notifyListeners();
       return true;
     } catch (e) {
       print('❌ Database login strictly failed: $e');
@@ -536,6 +563,8 @@ class AppState extends ChangeNotifier {
     required String phone,
     required String className,
     required String school,
+    required String role,
+    String? teacherId,
   }) async {
     try {
       final success = await DbHelper.registerUser(
@@ -545,9 +574,16 @@ class AppState extends ChangeNotifier {
         className: className,
         school: school,
         password: password,
+        role: role,
+        teacherId: teacherId,
       );
 
       if (!success) return false;
+
+      _userRole = role;
+      _teacherId = teacherId ?? '';
+      _prefs.setString('user_role', _userRole);
+      _prefs.setString('teacher_id', _teacherId);
 
       updateProfile(
         name: name,
@@ -682,6 +718,33 @@ class AppState extends ChangeNotifier {
   void deleteNote(int id) {
     _notesList.removeWhere((n) => n['id'] == id);
     _saveNotes();
+    notifyListeners();
+  }
+
+  // Fetch list of students linked to a specific teacher
+  Future<void> fetchLinkedStudents() async {
+    if (_teacherId.isEmpty) return;
+    try {
+      final list = await DbHelper.getLinkedStudents(_teacherId);
+      _linkedStudents = list;
+      notifyListeners();
+    } catch (e) {
+      print('❌ Error fetching linked students: $e');
+    }
+  }
+
+  // Custom quiz questions created by the teacher
+  void addCustomQuizQuestion({
+    required String question,
+    required List<String> options,
+    required int correctOptionIndex,
+  }) {
+    _customQuizQuestions.add({
+      'question': question,
+      'options': options,
+      'correctOptionIndex': correctOptionIndex,
+    });
+    _prefs.setString('custom_quiz_questions', jsonEncode(_customQuizQuestions));
     notifyListeners();
   }
 }
