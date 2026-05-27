@@ -158,6 +158,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
           phone: '9876543210',
           className: 'Class 10',
           school: 'Adyapan Public School',
+          role: 'student',
         );
       }
       
