@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../core/theme.dart';
 import '../core/app_state.dart';
+import '../core/db_helper.dart';
 import 'login_screen.dart';
 
 class TeacherDashboardScreen extends StatefulWidget {
@@ -278,83 +279,639 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> with Si
     );
   }
 
-  void _showAttendanceDialog(BuildContext context, Map<String, dynamic> student, int attendanceRate) {
+  Map<String, dynamic> _getStudentProgress(Map<String, dynamic> student) {
+    final name = student['name'] ?? '';
+    final code = name.hashCode.abs();
+    final mathPct = 50.0 + (code % 45); // between 50% and 95%
+    final sciPct = 40.0 + (code % 50);  // between 40% and 90%
+    final engPct = 60.0 + (code % 35);  // between 60% and 95%
+    final overallPct = (mathPct + sciPct + engPct) / 3.0;
+    final level = 1 + (code % 8);       // level 1 to 8
+    final xp = level * 200 - 150 + (code % 100);
+    final quizDone = 2 + (code % 3);    // 2 to 4 quizzes done
+    return {
+      'mathPct': mathPct,
+      'sciPct': sciPct,
+      'engPct': engPct,
+      'overallPct': overallPct,
+      'level': level,
+      'xp': xp,
+      'quizDone': quizDone,
+    };
+  }
+
+  void _showStudentInsightsDialog(BuildContext context, Map<String, dynamic> student) {
+    final studentId = student['id'] ?? '';
+    final progress = _getStudentProgress(student);
+
     showDialog(
       context: context,
       builder: (context) {
-        return AlertDialog(
-          backgroundColor: Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-          title: Row(
-            children: [
-              const Text('📊 ', style: TextStyle(fontSize: 20)),
-              Expanded(
-                child: Text(
-                  '${student['name']}\'s Attendance',
-                  style: GoogleFonts.fredoka(fontSize: 18, fontWeight: FontWeight.bold, color: const Color(0xFF1E293B)),
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            return DefaultTabController(
+              length: 3,
+              child: AlertDialog(
+                backgroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                title: Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 18,
+                      backgroundColor: const Color(0xFFECF5FF),
+                      child: Text(
+                        student['name'].toString().isNotEmpty 
+                            ? student['name'].toString().substring(0, 1).toUpperCase() 
+                            : 'S',
+                        style: GoogleFonts.fredoka(fontWeight: FontWeight.bold, color: Colors.blueAccent, fontSize: 13),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            student['name'] ?? '',
+                            style: GoogleFonts.fredoka(fontSize: 16, fontWeight: FontWeight.bold, color: const Color(0xFF1E293B)),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          Text(
+                            '${student['className']} • Insights',
+                            style: GoogleFonts.outfit(fontSize: 10.5, color: Colors.blueAccent, fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
+                contentPadding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                content: SizedBox(
+                  width: double.maxFinite,
+                  height: 420,
+                  child: Column(
+                    children: [
+                      TabBar(
+                        labelColor: const Color(0xFFFF3B70),
+                        unselectedLabelColor: const Color(0xFF64748B),
+                        indicatorColor: const Color(0xFFFF3B70),
+                        indicatorSize: TabBarIndicatorSize.label,
+                        labelStyle: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 12),
+                        unselectedLabelStyle: GoogleFonts.outfit(fontWeight: FontWeight.w600, fontSize: 12),
+                        tabs: const [
+                          Tab(text: '📅 Attendance'),
+                          Tab(text: '📈 Progress'),
+                          Tab(text: '🗺️ Roadmap'),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Expanded(
+                        child: TabBarView(
+                          children: [
+                            _buildAttendanceTabContent(studentId, student, setStateDialog),
+                            _buildProgressTabContent(progress),
+                            _buildRoadmapTabContent(progress),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      setState(() {}); // Refresh students grid rates
+                    },
+                    child: Text(
+                      'Close',
+                      style: GoogleFonts.fredoka(fontWeight: FontWeight.bold, color: const Color(0xFFFF3B70)),
+                    ),
+                  )
+                ],
               ),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildAttendanceTabContent(String studentId, Map<String, dynamic> student, StateSetter setStateDialog) {
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: DbHelper.fetchAttendanceLogs(studentId),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator(color: Color(0xFFFF3B70)));
+        }
+
+        final logs = snapshot.data ?? [];
+        int presentCount = logs.where((l) => l['status'] == 'Present').length;
+        int excusedCount = logs.where((l) => l['status'] == 'Excused').length;
+        int totalCount = logs.length;
+        int rate = totalCount > 0 ? ((presentCount / totalCount) * 100).round() : 100;
+
+        return SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Summary box
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.all(14),
+                padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFECFDF5),
-                  border: Border.all(color: const Color(0xFF10B981).withOpacity(0.3)),
+                  color: rate >= 85 ? const Color(0xFFECFDF5) : const Color(0xFFFFF7ED),
+                  border: Border.all(
+                    color: (rate >= 85 ? const Color(0xFF10B981) : Colors.orange).withOpacity(0.3),
+                  ),
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: Column(
                   children: [
                     Text(
                       'Overall Weekly Attendance Rate',
-                      style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w600, color: const Color(0xFF047857)),
+                      style: GoogleFonts.outfit(
+                        fontSize: 11, 
+                        fontWeight: FontWeight.w600, 
+                        color: rate >= 85 ? const Color(0xFF047857) : Colors.orange[800],
+                      ),
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '$attendanceRate%',
-                      style: GoogleFonts.fredoka(fontSize: 32, fontWeight: FontWeight.bold, color: const Color(0xFF065F46)),
+                      '$rate%',
+                      style: GoogleFonts.fredoka(
+                        fontSize: 30, 
+                        fontWeight: FontWeight.bold, 
+                        color: rate >= 85 ? const Color(0xFF065F46) : Colors.orange[950],
+                      ),
                     ),
                     Text(
-                      'Criteria Met: Excellent Status ✓',
-                      style: GoogleFonts.outfit(fontSize: 10.5, fontWeight: FontWeight.bold, color: const Color(0xFF047857)),
+                      'Total: $totalCount • Present: $presentCount • Excused: $excusedCount',
+                      style: GoogleFonts.outfit(
+                        fontSize: 10, 
+                        fontWeight: FontWeight.bold, 
+                        color: rate >= 85 ? const Color(0xFF047857) : Colors.orange[800],
+                      ),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 18),
-              Text(
-                'Weekly Subject Breakdown:',
-                style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.bold, color: const Color(0xFF475569)),
+              const SizedBox(height: 14),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Attendance Records:',
+                    style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.bold, color: const Color(0xFF475569)),
+                  ),
+                  ElevatedButton.icon(
+                    onPressed: () async {
+                      final marked = await _showMarkAttendanceBottomSheet(context, student);
+                      if (marked == true) {
+                        setStateDialog(() {});
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFFF3B70),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    icon: const Icon(Icons.add_rounded, size: 14, color: Colors.white),
+                    label: Text(
+                      'Mark',
+                      style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white),
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 8),
-              // Subject list
-              _buildAttendanceDialogRow('📐 Mathematics', 'Present', '10:30 AM', 'Live Class'),
-              _buildAttendanceDialogRow('⚛️ Science', 'Present', '11:45 AM', 'Live Class'),
-              _buildAttendanceDialogRow('📖 English', 'Present', '01:30 PM', 'Recorded Video'),
-              _buildAttendanceDialogRow('🌍 Social Studies', 'Excused', '02:45 PM', 'Manual Entry'),
+              if (logs.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 20.0),
+                  child: Center(
+                    child: Text(
+                      'No attendance logged yet.',
+                      style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey[500], fontStyle: FontStyle.italic),
+                    ),
+                  ),
+                )
+              else
+                ...logs.map((log) {
+                  final status = log['status'] as String? ?? 'Present';
+                  final subject = log['subject'] as String? ?? 'Subject';
+                  final source = log['source'] as String? ?? 'Manual';
+                  final time = log['time'] as String? ?? '';
+                  return _buildAttendanceDialogRow(subject, status, time, source);
+                }).toList(),
             ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text(
-                'Close',
-                style: GoogleFonts.fredoka(fontWeight: FontWeight.bold, color: const Color(0xFFFF3B70)),
-              ),
-            )
+        );
+      },
+    );
+  }
+
+  Widget _buildProgressTabContent(Map<String, dynamic> progress) {
+    final mathPct = progress['mathPct'] as double;
+    final sciPct = progress['sciPct'] as double;
+    final engPct = progress['engPct'] as double;
+    final overallPct = progress['overallPct'] as double;
+    final quizDone = progress['quizDone'] as int;
+    final xp = progress['xp'] as int;
+    final level = progress['level'] as int;
+
+    return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+            ),
+            child: Row(
+              children: [
+                Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    SizedBox(
+                      width: 54,
+                      height: 54,
+                      child: CircularProgressIndicator(
+                        value: overallPct / 100,
+                        strokeWidth: 5,
+                        backgroundColor: const Color(0xFFCBD5E1),
+                        valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF6366F1)),
+                      ),
+                    ),
+                    Text(
+                      '${overallPct.toStringAsFixed(0)}%',
+                      style: GoogleFonts.fredoka(fontSize: 11, fontWeight: FontWeight.bold, color: const Color(0xFF6366F1)),
+                    ),
+                  ],
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '⭐ Student Level $level',
+                        style: GoogleFonts.fredoka(fontSize: 13, fontWeight: FontWeight.bold, color: const Color(0xFF1E293B)),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '$quizDone quizzes completed • $xp XP',
+                        style: GoogleFonts.outfit(fontSize: 11, color: const Color(0xFF64748B), fontWeight: FontWeight.w500),
+                      ),
+                    ],
+                  ),
+                )
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Subject-wise Syllabus Progress:',
+            style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.bold, color: const Color(0xFF475569)),
+          ),
+          const SizedBox(height: 10),
+          _buildSyllabusProgressRow('📐 Mathematics', mathPct, const Color(0xFF2563EB)),
+          const SizedBox(height: 10),
+          _buildSyllabusProgressRow('⚛️ Science', sciPct, const Color(0xFF10B981)),
+          const SizedBox(height: 10),
+          _buildSyllabusProgressRow('📖 English', engPct, const Color(0xFF8B5CF6)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSyllabusProgressRow(String subject, double pct, Color color) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              subject,
+              style: GoogleFonts.fredoka(fontSize: 12, fontWeight: FontWeight.bold, color: const Color(0xFF1E293B)),
+            ),
+            Text(
+              '${pct.toStringAsFixed(0)}%',
+              style: GoogleFonts.fredoka(fontSize: 11, fontWeight: FontWeight.bold, color: color),
+            ),
           ],
+        ),
+        const SizedBox(height: 4),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: LinearProgressIndicator(
+            value: pct / 100,
+            minHeight: 7,
+            backgroundColor: color.withOpacity(0.1),
+            valueColor: AlwaysStoppedAnimation<Color>(color),
+          ),
+        )
+      ],
+    );
+  }
+
+  Widget _buildRoadmapTabContent(Map<String, dynamic> progress) {
+    return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Mathematics Learning Pathway:',
+            style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.bold, color: const Color(0xFF475569)),
+          ),
+          const SizedBox(height: 10),
+          _buildRoadmapNodeTimeline('1', 'Arithmetic Basics', 'BODMAS Foundations', 'completed'),
+          _buildRoadmapNodeTimeline('2', 'BODMAS Balancer', 'Equation Balancing', 'unlocked'),
+          _buildRoadmapNodeTimeline('3', 'Fraction Arcade', 'Division & Pieces', 'locked'),
+          _buildRoadmapNodeTimeline('4', 'Algebra Quest', 'Find the Unknown X', 'locked'),
+          
+          const SizedBox(height: 16),
+          Text(
+            'Science Learning Pathway:',
+            style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.bold, color: const Color(0xFF475569)),
+          ),
+          const SizedBox(height: 10),
+          _buildRoadmapNodeTimeline('1', 'Solar System Orbit', 'Planets & Gravity', 'completed'),
+          _buildRoadmapNodeTimeline('2', 'Atomic Structure', 'Electrons & Protons', 'unlocked'),
+          _buildRoadmapNodeTimeline('3', 'Chemical Equations', 'Reaction Balancer', 'locked'),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRoadmapNodeTimeline(String stepNum, String title, String subtitle, String status) {
+    Color iconBg = Colors.grey[200]!;
+    Color lineCol = Colors.grey[300]!;
+    IconData icon = Icons.lock_rounded;
+    Color iconCol = Colors.grey[500]!;
+    Color titleCol = Colors.grey[600]!;
+
+    if (status == 'completed') {
+      iconBg = const Color(0xFFECFDF5);
+      lineCol = const Color(0xFF10B981);
+      icon = Icons.check_circle_rounded;
+      iconCol = const Color(0xFF10B981);
+      titleCol = const Color(0xFF1E293B);
+    } else if (status == 'unlocked') {
+      iconBg = const Color(0xFFEFF6FF);
+      lineCol = Colors.blueAccent;
+      icon = Icons.play_circle_fill_rounded;
+      iconCol = Colors.blueAccent;
+      titleCol = const Color(0xFF1E293B);
+    }
+
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Column(
+            children: [
+              Container(
+                width: 20,
+                height: 20,
+                decoration: BoxDecoration(
+                  color: iconBg,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, size: 11, color: iconCol),
+              ),
+              Expanded(
+                child: Container(
+                  width: 2,
+                  color: lineCol,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 12.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: GoogleFonts.fredoka(fontSize: 12, fontWeight: FontWeight.bold, color: titleCol),
+                  ),
+                  Text(
+                    subtitle,
+                    style: GoogleFonts.outfit(fontSize: 10, color: const Color(0xFF64748B), fontWeight: FontWeight.w500),
+                  ),
+                ],
+              ),
+            ),
+          )
+        ],
+      ),
+    );
+  }
+
+  Future<bool?> _showMarkAttendanceBottomSheet(BuildContext context, Map<String, dynamic> student) {
+    String selectedSubject = '📐 Mathematics';
+    String selectedStatus = 'Present';
+    String selectedSource = 'Manual Entry';
+    
+    return showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setStateSheet) {
+            return Container(
+              padding: EdgeInsets.only(
+                top: 20,
+                left: 20,
+                right: 20,
+                bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+              ),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 50,
+                      height: 5,
+                      decoration: BoxDecoration(
+                        color: Colors.grey[300],
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Mark Attendance',
+                    style: GoogleFonts.fredoka(fontSize: 20, fontWeight: FontWeight.bold, color: const Color(0xFF1E293B)),
+                  ),
+                  Text(
+                    'Student: ${student['name']}',
+                    style: GoogleFonts.outfit(fontSize: 13, color: Colors.blueAccent, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Subject',
+                    style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.bold, color: const Color(0xFF475569)),
+                  ),
+                  const SizedBox(height: 4),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: selectedSubject,
+                        isExpanded: true,
+                        onChanged: (val) => setStateSheet(() => selectedSubject = val!),
+                        items: ['📐 Mathematics', '⚛️ Science', '📖 English', '💻 Computer Science', '🌍 Social Studies']
+                            .map((s) => DropdownMenuItem(value: s, child: Text(s, style: GoogleFonts.outfit(fontSize: 13)))).toList(),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Attendance Status',
+                    style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.bold, color: const Color(0xFF475569)),
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: ['Present', 'Absent', 'Excused'].map((status) {
+                      final isSelected = selectedStatus == status;
+                      Color btnColor = Colors.grey[200]!;
+                      Color txtColor = const Color(0xFF475569);
+                      if (isSelected) {
+                        if (status == 'Present') { btnColor = const Color(0xFFECFDF5); txtColor = const Color(0xFF047857); }
+                        else if (status == 'Absent') { btnColor = const Color(0xFFFEF2F2); txtColor = const Color(0xFFB91C1C); }
+                        else { btnColor = const Color(0xFFEFF6FF); txtColor = const Color(0xFF1D4ED8); }
+                      }
+                      return Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                          child: InkWell(
+                            onTap: () => setStateSheet(() => selectedStatus = status),
+                            child: Container(
+                              alignment: Alignment.center,
+                              padding: const EdgeInsets.symmetric(vertical: 10),
+                              decoration: BoxDecoration(
+                                color: btnColor,
+                                border: Border.all(
+                                  color: isSelected ? txtColor : Colors.transparent,
+                                  width: 1.5,
+                                ),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                status,
+                                style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.bold, color: txtColor),
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Class Type / Source',
+                    style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.bold, color: const Color(0xFF475569)),
+                  ),
+                  const SizedBox(height: 4),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: selectedSource,
+                        isExpanded: true,
+                        onChanged: (val) => setStateSheet(() => selectedSource = val!),
+                        items: ['Live Class', 'Recorded Video', 'Manual Entry']
+                            .map((s) => DropdownMenuItem(value: s, child: Text(s, style: GoogleFonts.outfit(fontSize: 13)))).toList(),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 48,
+                    child: ElevatedButton(
+                      onPressed: () async {
+                        final now = DateTime.now();
+                        final hour = now.hour > 12 ? now.hour - 12 : (now.hour == 0 ? 12 : now.hour);
+                        final ampm = now.hour >= 12 ? 'PM' : 'AM';
+                        final min = now.minute < 10 ? '0${now.minute}' : '${now.minute}';
+                        final timeStr = '$hour:$min $ampm';
+                        
+                        final state = Provider.of<AppState>(context, listen: false);
+                        final success = await state.markStudentAttendanceByTeacher(
+                          studentId: student['id'] ?? '',
+                          subject: selectedSubject,
+                          status: selectedStatus,
+                          time: timeStr,
+                          source: selectedSource,
+                        );
+                        
+                        if (success) {
+                          Navigator.pop(context, true);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('🎉 Attendance marked successfully for ${student['name']}!', style: AdyapanTheme.outfit(fontWeight: FontWeight.bold, color: Colors.white)),
+                              backgroundColor: AdyapanTheme.green,
+                              behavior: SnackBarBehavior.floating,
+                            ),
+                          );
+                        } else {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('❌ Failed to mark attendance on the database!')),
+                          );
+                        }
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFFF3B70),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      child: Text(
+                        'Mark Student Attendance ✓',
+                        style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: Colors.white),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
         );
       },
     );
   }
 
   Widget _buildAttendanceDialogRow(String subject, String status, String time, String source) {
+    Color statusColor = AdyapanTheme.green;
+    if (status == 'Absent') statusColor = Colors.redAccent;
+    if (status == 'Excused') statusColor = AdyapanTheme.purple;
+    
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
@@ -377,15 +934,16 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> with Si
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
-              color: status == 'Present' ? const Color(0xFFECFDF5) : const Color(0xFFEFF6FF),
+              color: statusColor.withOpacity(0.1),
               borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: statusColor.withOpacity(0.3)),
             ),
             child: Text(
               status,
               style: GoogleFonts.outfit(
                 fontSize: 10.5,
                 fontWeight: FontWeight.bold,
-                color: status == 'Present' ? const Color(0xFF047857) : const Color(0xFF1D4ED8),
+                color: statusColor,
               ),
             ),
           )
@@ -448,90 +1006,104 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> with Si
       itemCount: list.length,
       itemBuilder: (context, index) {
         final student = list[index];
-        final attendanceRate = 92 + (index % 3) * 2;
-        return GestureDetector(
-          onTap: () => _showAttendanceDialog(context, student, attendanceRate),
-          child: Card(
-            elevation: 0,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
-              side: const BorderSide(color: Color(0xFFE2E8F0)),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  CircleAvatar(
-                    radius: 20,
-                    backgroundColor: const Color(0xFFECF5FF),
-                    child: Text(
-                      student['name'].toString().isNotEmpty ? student['name'].toString().substring(0, 1).toUpperCase() : 'S',
-                      style: GoogleFonts.fredoka(fontWeight: FontWeight.bold, color: Colors.blueAccent),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    student['name'] ?? '',
-                    style: GoogleFonts.fredoka(fontSize: 15, fontWeight: FontWeight.bold, color: const Color(0xFF1E293B)),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  Text(
-                    student['className'] ?? 'Class Student',
-                    style: GoogleFonts.outfit(fontSize: 11, color: Colors.blueAccent, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 4),
-                  // Beautiful Attendance rate badge
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFECFDF5),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: const Color(0xFF10B981).withOpacity(0.2)),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Text('📊 ', style: TextStyle(fontSize: 10)),
-                        Text(
-                          'Attendance: $attendanceRate%',
-                          style: GoogleFonts.outfit(fontSize: 9.5, fontWeight: FontWeight.bold, color: const Color(0xFF065F46)),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const Spacer(),
-                  const Divider(height: 12),
-                  Row(
+        final studentId = student['id'] ?? '';
+
+        return FutureBuilder<List<Map<String, dynamic>>>(
+          future: DbHelper.fetchAttendanceLogs(studentId),
+          builder: (context, snapshot) {
+            final logs = snapshot.data ?? [];
+            int present = logs.where((l) => l['status'] == 'Present').length;
+            int total = logs.length;
+            int rate = total > 0 ? ((present / total) * 100).round() : 100;
+
+            Color badgeBg = rate >= 85 ? const Color(0xFFECFDF5) : const Color(0xFFFFF7ED);
+            Color badgeText = rate >= 85 ? const Color(0xFF065F46) : Colors.orange[800]!;
+            Color badgeBorder = (rate >= 85 ? const Color(0xFF10B981) : Colors.orange).withOpacity(0.2);
+
+            return GestureDetector(
+              onTap: () => _showStudentInsightsDialog(context, student),
+              child: Card(
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                  side: const BorderSide(color: Color(0xFFE2E8F0)),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Icon(Icons.school_outlined, size: 13, color: Color(0xFF94A3B8)),
-                      const SizedBox(width: 4),
-                      Expanded(
+                      CircleAvatar(
+                        radius: 20,
+                        backgroundColor: const Color(0xFFECF5FF),
                         child: Text(
-                          student['school'] ?? '',
-                          style: GoogleFonts.outfit(fontSize: 10, color: const Color(0xFF64748B), fontWeight: FontWeight.w600),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                          student['name'].toString().isNotEmpty ? student['name'].toString().substring(0, 1).toUpperCase() : 'S',
+                          style: GoogleFonts.fredoka(fontWeight: FontWeight.bold, color: Colors.blueAccent),
                         ),
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      const Icon(Icons.phone_outlined, size: 13, color: Color(0xFF94A3B8)),
-                      const SizedBox(width: 4),
+                      const SizedBox(height: 12),
                       Text(
-                        student['phone'] ?? '',
-                        style: GoogleFonts.outfit(fontSize: 10, color: const Color(0xFF64748B), fontWeight: FontWeight.w600),
+                        student['name'] ?? '',
+                        style: GoogleFonts.fredoka(fontSize: 15, fontWeight: FontWeight.bold, color: const Color(0xFF1E293B)),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      Text(
+                        student['className'] ?? 'Class Student',
+                        style: GoogleFonts.outfit(fontSize: 11, color: Colors.blueAccent, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 4),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: badgeBg,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: badgeBorder),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Text('📊 ', style: TextStyle(fontSize: 10)),
+                            Text(
+                              'Attendance: $rate%',
+                              style: GoogleFonts.outfit(fontSize: 9.5, fontWeight: FontWeight.bold, color: badgeText),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Spacer(),
+                      const Divider(height: 12),
+                      Row(
+                        children: [
+                          const Icon(Icons.school_outlined, size: 13, color: Color(0xFF94A3B8)),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              student['school'] ?? '',
+                              style: GoogleFonts.outfit(fontSize: 10, color: const Color(0xFF64748B), fontWeight: FontWeight.w600),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          const Icon(Icons.phone_outlined, size: 13, color: Color(0xFF94A3B8)),
+                          const SizedBox(width: 4),
+                          Text(
+                            student['phone'] ?? '',
+                            style: GoogleFonts.outfit(fontSize: 10, color: const Color(0xFF64748B), fontWeight: FontWeight.w600),
+                          ),
+                        ],
                       ),
                     ],
                   ),
-                ],
+                ),
               ),
-            ),
-          ),
+            );
+          },
         );
       },
     );
@@ -959,7 +1531,7 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> with Si
 
         return Card(
           elevation: 0,
-          margin: const EdgeInsets.bottom(16),
+          margin: const EdgeInsets.only(bottom: 16),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
             side: const BorderSide(color: Color(0xFFE2E8F0)),

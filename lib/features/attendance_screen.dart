@@ -15,7 +15,29 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   String selectedReason = 'Medical Leave';
   final TextEditingController commentController = TextEditingController();
 
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Provider.of<AppState>(context, listen: false).syncAttendanceFromDb();
+    });
+  }
+
   void _submitLeave() {
+    final appState = Provider.of<AppState>(context, listen: false);
+    final now = DateTime.now();
+    final hour = now.hour > 12 ? now.hour - 12 : (now.hour == 0 ? 12 : now.hour);
+    final ampm = now.hour >= 12 ? 'PM' : 'AM';
+    final min = now.minute < 10 ? '0${now.minute}' : '${now.minute}';
+    final timeStr = '$hour:$min $ampm';
+
+    appState.markAttendance(
+      '🎒 Leave: $selectedReason',
+      'Excused',
+      timeStr,
+      source: 'Manual',
+    );
+
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text('🎉 Leave Application submitted successfully to Class Teacher!'),

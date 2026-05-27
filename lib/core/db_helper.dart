@@ -87,6 +87,18 @@ class DbHelper {
           INDEX idx_login_events_created_at (created_at)
         );
       ''');
+      await _conn!.execute('''
+        CREATE TABLE IF NOT EXISTS attendance (
+          id VARCHAR(64) PRIMARY KEY,
+          user_id VARCHAR(64) NOT NULL,
+          subject VARCHAR(100) NOT NULL,
+          status VARCHAR(30) NOT NULL,
+          time VARCHAR(50) NOT NULL,
+          source VARCHAR(50) NOT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          INDEX idx_attendance_user_id (user_id)
+        );
+      ''');
     } catch (e) {
       print('❌ Database table initialization failed: $e');
     }
@@ -318,6 +330,7 @@ class DbHelper {
       }
 
       return {
+        'id': row['id'] ?? '',
         'name': row['name'] ?? '',
         'email': row['email'] ?? '',
         'phone': row['phone'] ?? '',
@@ -341,7 +354,7 @@ class DbHelper {
     try {
       final conn = await getConnection();
       final results = await conn.execute('''
-        SELECT name, email, phone, class_name, school, created_at
+        SELECT id, name, email, phone, class_name, school, created_at
         FROM users
         WHERE role = 'student' AND teacher_id = :teacherId
         ORDER BY name ASC;
@@ -351,6 +364,7 @@ class DbHelper {
       for (final row in results.rows) {
         final assoc = row.assoc();
         list.add({
+          'id': assoc['id'] ?? '',
           'name': assoc['name'] ?? '',
           'email': assoc['email'] ?? '',
           'phone': assoc['phone'] ?? '',
@@ -363,6 +377,65 @@ class DbHelper {
     } catch (e) {
       print('❌ Failed to fetch linked students: $e');
       return [];
+    }
+  }
+
+  // Fetch attendance logs for a specific user from TiDB
+  static Future<List<Map<String, dynamic>>> fetchAttendanceLogs(String userId) async {
+    try {
+      final conn = await getConnection();
+      final results = await conn.execute('''
+        SELECT id, subject, status, time, source, created_at
+        FROM attendance
+        WHERE user_id = :userId
+        ORDER BY created_at DESC;
+      ''', {'userId': userId});
+
+      final list = <Map<String, dynamic>>[];
+      for (final row in results.rows) {
+        final assoc = row.assoc();
+        list.add({
+          'id': assoc['id'] ?? '',
+          'subject': assoc['subject'] ?? '',
+          'status': assoc['status'] ?? '',
+          'time': assoc['time'] ?? '',
+          'source': assoc['source'] ?? '',
+          'createdAt': assoc['created_at'] ?? '',
+        });
+      }
+      return list;
+    } catch (e) {
+      print('❌ Failed to fetch attendance logs: $e');
+      return [];
+    }
+  }
+
+  // Insert a new attendance record into TiDB
+  static Future<bool> insertOrUpdateAttendance({
+    required String userId,
+    required String subject,
+    required String status,
+    required String time,
+    required String source,
+  }) async {
+    try {
+      final conn = await getConnection();
+      final logId = _newId('att');
+      await conn.execute('''
+        INSERT INTO attendance (id, user_id, subject, status, time, source)
+        VALUES (:id, :userId, :subject, :status, :time, :source);
+      ''', {
+        'id': logId,
+        'userId': userId,
+        'subject': subject,
+        'status': status,
+        'time': time,
+        'source': source,
+      });
+      return true;
+    } catch (e) {
+      print('❌ Failed to insert attendance: $e');
+      return false;
     }
   }
 }

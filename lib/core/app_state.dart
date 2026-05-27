@@ -83,6 +83,9 @@ class AppState extends ChangeNotifier {
   bool _isLoggedIn = false;
   bool get isLoggedIn => _isLoggedIn;
 
+  String _userId = '';
+  String get userId => _userId;
+
   String _userRole = 'student';
   String get userRole => _userRole;
 
@@ -209,6 +212,7 @@ class AppState extends ChangeNotifier {
     _isLoggedIn = _prefs.getBool('is_logged_in') ?? false;
     _userRole = _prefs.getString('user_role') ?? 'student';
     _teacherId = _prefs.getString('teacher_id') ?? '';
+    _userId = _prefs.getString('user_id') ?? '';
     final customQsJson = _prefs.getString('custom_quiz_questions');
     if (customQsJson != null) {
       _customQuizQuestions = List<Map<String, dynamic>>.from(jsonDecode(customQsJson));
@@ -368,6 +372,10 @@ class AppState extends ChangeNotifier {
 
     _initialized = true;
     notifyListeners();
+
+    if (_isLoggedIn && _userRole == 'student') {
+      syncAttendanceFromDb();
+    }
   }
 
 
@@ -530,6 +538,7 @@ class AppState extends ChangeNotifier {
       
       _userRole = user['role'] ?? 'student';
       _teacherId = user['teacher_id'] ?? '';
+      _userId = user['id'] ?? '';
       
       _prefs.setString('student_name', _studentName);
       _prefs.setString('student_email', _studentEmail);
@@ -538,12 +547,15 @@ class AppState extends ChangeNotifier {
       _prefs.setString('student_school', _studentSchool);
       _prefs.setString('user_role', _userRole);
       _prefs.setString('teacher_id', _teacherId);
+      _prefs.setString('user_id', _userId);
       
       _isLoggedIn = true;
       _prefs.setBool('is_logged_in', true);
       
       if (_userRole == 'teacher') {
         await fetchLinkedStudents();
+      } else {
+        await syncAttendanceFromDb();
       }
       
       notifyListeners();
@@ -622,6 +634,81 @@ class AppState extends ChangeNotifier {
     }
     _saveAttendance();
     notifyListeners();
+
+    if (_userId.isNotEmpty) {
+      DbHelper.insertOrUpdateAttendance(
+        userId: _userId,
+        subject: subject,
+        status: status,
+        time: time,
+        source: source,
+      ).then((success) {
+        if (success) {
+          print('✅ Synchronized attendance marking to cloud database!');
+        }
+      });
+    }
+  }
+
+  Future<void> syncAttendanceFromDb() async {
+    if (_userId.isEmpty) return;
+    try {
+      final dbLogs = await DbHelper.fetchAttendanceLogs(_userId);
+      if (dbLogs.isNotEmpty) {
+        _attendanceLogs = dbLogs;
+        _saveAttendance();
+        notifyListeners();
+      } else {
+        // If database logs are empty but we have local logs (or default logs), push them to the database!
+        if (_attendanceLogs.isNotEmpty) {
+          for (final log in _attendanceLogs) {
+            await DbHelper.insertOrUpdateAttendance(
+              userId: _userId,
+              subject: log['subject'] ?? '',
+              status: log['status'] ?? '',
+              time: log['time'] ?? '',
+              source: log['source'] ?? '',
+            );
+          }
+          final fetched = await DbHelper.fetchAttendanceLogs(_userId);
+          if (fetched.isNotEmpty) {
+            _attendanceLogs = fetched;
+            _saveAttendance();
+            notifyListeners();
+          }
+        }
+      }
+    } catch (e) {
+      print('❌ Failed to sync attendance from database: $e');
+    }
+  }
+
+  Future<bool> markStudentAttendanceByTeacher({
+    required String studentId,
+    required String subject,
+    required String status,
+    required String time,
+    required String source,
+  }) async {
+    try {
+      final success = await DbHelper.insertOrUpdateAttendance(
+        userId: studentId,
+        subject: subject,
+        status: status,
+        time: time,
+        source: source,
+      );
+      if (success) {
+        if (_userId == studentId) {
+          await syncAttendanceFromDb();
+        }
+        return true;
+      }
+      return false;
+    } catch (e) {
+      print('❌ Failed to mark student attendance by teacher: $e');
+      return false;
+    }
   }
 
   // ── HOMEWORK MANAGEMENT ──
