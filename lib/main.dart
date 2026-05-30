@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'core/theme.dart';
 import 'core/app_state.dart';
+import 'core/api_bridge.dart';
 import 'features/login_screen.dart';
 import 'features/app_layout.dart';
 import 'features/teacher_dashboard_screen.dart';
@@ -15,6 +16,9 @@ void main() async {
 
   // Load environment variables from .env file
   await dotenv.load(fileName: ".env");
+
+  // Initialize API service (load saved auth token)
+  await ApiBridge.init();
 
   // Force light system status bar style with white background
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(

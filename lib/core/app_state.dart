@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'db_helper.dart';
+import 'api_bridge.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -521,20 +522,20 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  // Validate credentials against remote TiDB Database strictly (no local fallbacks)
+  // Validate credentials against remote backend API strictly (no local fallbacks)
   Future<bool> loginUser(String email, String password) async {
     try {
-      final user = await DbHelper.loginUser(email, password);
+      final user = await ApiBridge.loginUser(email, password);
       if (user == null) {
         return false;
       }
       
       // Update local profile state
-      _studentName = user['name'];
-      _studentEmail = user['email'];
-      _studentPhone = user['phone'];
-      _studentClass = user['className'];
-      _studentSchool = user['school'];
+      _studentName = user['name'] ?? '';
+      _studentEmail = user['email'] ?? '';
+      _studentPhone = user['phone'] ?? '';
+      _studentClass = user['className'] ?? '';
+      _studentSchool = user['school'] ?? '';
       
       _userRole = user['role'] ?? 'student';
       _teacherId = user['teacher_id'] ?? '';
@@ -552,22 +553,18 @@ class AppState extends ChangeNotifier {
       _isLoggedIn = true;
       _prefs.setBool('is_logged_in', true);
       
-      if (_userRole == 'teacher') {
-        await fetchLinkedStudents();
-      } else {
-        await syncAttendanceFromDb();
-      }
+      // Sync data from backend
+      await syncAttendanceFromDb();
       
       notifyListeners();
       return true;
     } catch (e) {
-      print('❌ Database login strictly failed: $e');
-      // Rethrow to let the UI catch and display the exact database connection error!
-      throw Exception('Database Connection Error: $e');
+      print('❌ API login failed: $e');
+      throw Exception('Connection Error: $e');
     }
   }
 
-  // Register a new user in remote TiDB Database strictly (no local fallbacks)
+  // Register a new user via REST API strictly (no local fallbacks)
   Future<bool> registerUser({
     required String email,
     required String password,
@@ -579,7 +576,7 @@ class AppState extends ChangeNotifier {
     String? teacherId,
   }) async {
     try {
-      final success = await DbHelper.registerUser(
+      final success = await ApiBridge.registerUser(
         name: name,
         email: email,
         phone: phone,
@@ -635,51 +632,29 @@ class AppState extends ChangeNotifier {
     _saveAttendance();
     notifyListeners();
 
+    // Sync to backend via API
     if (_userId.isNotEmpty) {
-      DbHelper.insertOrUpdateAttendance(
+      ApiBridge.insertOrUpdateAttendance(
         userId: _userId,
         subject: subject,
         status: status,
         time: time,
         source: source,
-      ).then((success) {
-        if (success) {
-          print('✅ Synchronized attendance marking to cloud database!');
-        }
-      });
+      );
     }
   }
 
   Future<void> syncAttendanceFromDb() async {
     if (_userId.isEmpty) return;
     try {
-      final dbLogs = await DbHelper.fetchAttendanceLogs(_userId);
+      final dbLogs = await ApiBridge.fetchAttendanceLogs(_userId);
       if (dbLogs.isNotEmpty) {
         _attendanceLogs = dbLogs;
         _saveAttendance();
         notifyListeners();
-      } else {
-        // If database logs are empty but we have local logs (or default logs), push them to the database!
-        if (_attendanceLogs.isNotEmpty) {
-          for (final log in _attendanceLogs) {
-            await DbHelper.insertOrUpdateAttendance(
-              userId: _userId,
-              subject: log['subject'] ?? '',
-              status: log['status'] ?? '',
-              time: log['time'] ?? '',
-              source: log['source'] ?? '',
-            );
-          }
-          final fetched = await DbHelper.fetchAttendanceLogs(_userId);
-          if (fetched.isNotEmpty) {
-            _attendanceLogs = fetched;
-            _saveAttendance();
-            notifyListeners();
-          }
-        }
       }
     } catch (e) {
-      print('❌ Failed to sync attendance from database: $e');
+      print('❌ Failed to sync attendance from API: $e');
     }
   }
 
