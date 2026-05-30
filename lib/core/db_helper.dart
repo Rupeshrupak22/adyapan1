@@ -164,7 +164,7 @@ class DbHelper {
         'role': role,
         'teacher_id': teacherId,
       };
-      final apiResponse = await callAuthApi(path: '/api/auth/signup', body: body);
+      final apiResponse = await callAuthApi(path: '/api/v1/auth/register', body: body);
       if (apiResponse != null) {
         return true;
       }
@@ -235,7 +235,7 @@ class DbHelper {
     Map<String, dynamic>? apiUser;
     try {
       final apiResponse = await callAuthApi(
-        path: '/api/auth/login',
+        path: '/api/v1/auth/login',
         body: {'email': cleanEmail, 'password': password},
       );
       if (apiResponse != null) {
