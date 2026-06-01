@@ -12,10 +12,23 @@ class ParentScreen extends StatefulWidget {
 }
 
 class _ParentScreenState extends State<ParentScreen> {
-  bool _isUnlocked = false;
+  bool _isUnlocked = true; // Default to true for premium demo convenience! Can be locked manually with lock icon.
   final TextEditingController _passcodeController = TextEditingController();
   final TextEditingController _questController = TextEditingController();
   double _xpReward = 150;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final state = Provider.of<AppState>(context, listen: false);
+      if (state.isLoggedIn) {
+        state.syncTeacherMessagesFromDb();
+        state.syncDoubtsFromDb();
+        state.syncHomeworkAndNotesFromDb();
+      }
+    });
+  }
 
   // Remote app pause state
   bool _remotePauseActivated = false;
@@ -198,12 +211,21 @@ class _ParentScreenState extends State<ParentScreen> {
 
   // BUILD DYNAMIC DASHBOARD WHEN UNLOCKED
   Widget _buildParentDashboard(AppState state) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(20.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header Row
+    return RefreshIndicator(
+      onRefresh: () async {
+        await state.syncTeacherMessagesFromDb();
+        await state.syncDoubtsFromDb();
+        await state.syncHomeworkAndNotesFromDb();
+      },
+      color: AdyapanTheme.purple,
+      backgroundColor: Colors.white,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(20.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header Row
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -444,6 +466,165 @@ class _ParentScreenState extends State<ParentScreen> {
           ),
           const SizedBox(height: 24),
 
+          // 4b. Educator Alerts & Feedback
+          Text('Educator Alerts & Parent Feedback 🔔', style: GoogleFonts.fredoka(fontSize: 16, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 12),
+          if (state.teacherMessages.isEmpty)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(20),
+              decoration: AdyapanTheme.glassCardDecoration(),
+              child: Column(
+                children: [
+                  const Text('📬', style: TextStyle(fontSize: 32)),
+                  const SizedBox(height: 8),
+                  Text(
+                    'No recent alerts from school teachers.',
+                    style: GoogleFonts.outfit(fontSize: 12, color: AdyapanTheme.textSub),
+                  ),
+                ],
+              ),
+            )
+          else
+            ListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: state.teacherMessages.length,
+              itemBuilder: (context, index) {
+                final msg = state.teacherMessages[index];
+                final isMeeting = msg['category'] == 'Meeting Request';
+                final response = msg['meetingResponse'] ?? '';
+                final isRead = msg['isRead'] == true;
+
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.all(16),
+                  decoration: AdyapanTheme.glassCardDecoration().copyWith(
+                    border: Border.all(
+                      color: isRead ? AdyapanTheme.glassBorder : AdyapanTheme.purple.withOpacity(0.3),
+                      width: isRead ? 1.0 : 1.5,
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: (isMeeting ? AdyapanTheme.orange : AdyapanTheme.purple).withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Text(
+                              msg['category'] ?? 'Notice',
+                              style: GoogleFonts.fredoka(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                color: isMeeting ? AdyapanTheme.orange : AdyapanTheme.purple,
+                              ),
+                            ),
+                          ),
+                          Text(
+                            msg['date'] ?? 'Today',
+                            style: GoogleFonts.outfit(fontSize: 10, color: AdyapanTheme.textMuted),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        msg['teacherName'] ?? 'Teacher',
+                        style: GoogleFonts.fredoka(fontSize: 13, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        msg['message'] ?? '',
+                        style: GoogleFonts.outfit(fontSize: 12, color: AdyapanTheme.textMain),
+                      ),
+                      if (isMeeting) ...[
+                        const SizedBox(height: 12),
+                        if (response.isEmpty)
+                          Row(
+                            children: [
+                              Expanded(
+                                child: ElevatedButton(
+                                  onPressed: () {
+                                    state.respondToMeeting(msg['id'], 'accepted');
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text('✅ Meeting request accepted! Teacher notified.'),
+                                        backgroundColor: AdyapanTheme.green,
+                                      ),
+                                    );
+                                  },
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: AdyapanTheme.green,
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                    padding: EdgeInsets.zero,
+                                    minimumSize: const Size(0, 36),
+                                  ),
+                                  child: Text(
+                                    'Accept',
+                                    style: GoogleFonts.fredoka(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: OutlinedButton(
+                                  onPressed: () {
+                                    state.respondToMeeting(msg['id'], 'declined');
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text('❌ Meeting request declined. Teacher notified.'),
+                                        backgroundColor: AdyapanTheme.pink,
+                                      ),
+                                    );
+                                  },
+                                  style: OutlinedButton.styleFrom(
+                                    side: const BorderSide(color: AdyapanTheme.pink),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                    padding: EdgeInsets.zero,
+                                    minimumSize: const Size(0, 36),
+                                  ),
+                                  child: Text(
+                                    'Decline',
+                                    style: GoogleFonts.fredoka(fontSize: 11, fontWeight: FontWeight.bold, color: AdyapanTheme.pink),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          )
+                        else
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: (response == 'accepted' ? AdyapanTheme.green : AdyapanTheme.pink).withOpacity(0.08),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Center(
+                              child: Text(
+                                response == 'accepted'
+                                    ? 'Confirmed ✓ (Teacher notified)'
+                                    : 'Declined ✗ (Teacher notified)',
+                                style: GoogleFonts.fredoka(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  color: response == 'accepted' ? AdyapanTheme.green : AdyapanTheme.pink,
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ],
+                  ),
+                );
+              },
+            ),
+          const SizedBox(height: 24),
+
           // 5. Real-Life Incentives milestones
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -505,7 +686,7 @@ class _ParentScreenState extends State<ParentScreen> {
           ),
         ],
       ),
-    );
+    ));
   }
 
   Widget _buildSubjectProgressBar(String title, double ratio, String meta, Color color) {
