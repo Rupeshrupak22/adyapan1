@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
@@ -2162,6 +2163,12 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
                             );
                             if (result != null && result.files.single.name.isNotEmpty) {
                               final filename = result.files.single.name;
+                              final filepath = result.files.single.path;
+                              if (!context.mounted) return;
+                              
+                              final durationVal = await _showDurationDialog(context, topic);
+                              if (durationVal == null || durationVal.isEmpty) return;
+                              
                               if (!context.mounted) return;
                               
                               // Premium simulated upload progress dialog
@@ -2190,9 +2197,10 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
                                           // Add recorded lecture dynamically to AppState
                                           state.addRecordedLecture(
                                             topic,
-                                            'Recorded • 45 mins',
+                                            'Recorded • $durationVal',
                                             state.studentName.isNotEmpty ? state.studentName : 'Educator',
                                             emoji,
+                                            videoUrl: filepath,
                                           );
                                           
                                           // Remove task from scheduled recorded video uploads list
@@ -3015,21 +3023,22 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
                         const SizedBox(width: 12),
                         Expanded(
                           child: ElevatedButton(
-                            onPressed: () {
+                            onPressed: () async {
                               if (topicCtrl.text.isEmpty || subjectCtrl.text.isEmpty) {
                                 return;
                               }
-                              Navigator.pop(ctx);
-                              final state = Provider.of<AppState>(context, listen: false);
-                              if (selectedType == 'Live Class') {
-                                state.addLiveClass({
-                                  'subject': subjectCtrl.text,
-                                  'topic': topicCtrl.text,
-                                  'time': timeCtrl.text,
-                                  'status': selectedStatus,
-                                  'isLive': selectedStatus == 'LIVE NOW' || selectedStatus == 'LIVE IN 10 MINS',
-                                });
-                              } else {
+                              
+                              if (selectedType != 'Live Class' && selectedStatus == 'Completed') {
+                                final durationVal = await _showDurationDialog(context, topicCtrl.text);
+                                if (durationVal == null || durationVal.isEmpty) return;
+                                
+                                FilePickerResult? fileResult = await FilePicker.pickFiles(type: FileType.any);
+                                final videoPath = fileResult?.files.single.path;
+                                
+                                if (!context.mounted) return;
+                                
+                                Navigator.pop(ctx);
+                                final state = Provider.of<AppState>(context, listen: false);
                                 state.addVideoUpload({
                                   'subject': subjectCtrl.text,
                                   'topic': topicCtrl.text,
@@ -3037,15 +3046,34 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
                                   'status': selectedStatus,
                                   'isCompleted': selectedStatus == 'Completed',
                                 });
-                                if (selectedStatus == 'Completed') {
-                                  // Auto-publish to recorded classes list!
-                                  final emoji = getEmojiForSubject(subjectCtrl.text);
-                                  state.addRecordedLecture(
-                                    topicCtrl.text,
-                                    'Recorded • 45 mins',
-                                    state.studentName.isNotEmpty ? state.studentName : 'Educator',
-                                    emoji,
-                                  );
+                                
+                                final emoji = getEmojiForSubject(subjectCtrl.text);
+                                state.addRecordedLecture(
+                                  topicCtrl.text,
+                                  'Recorded • $durationVal',
+                                  state.studentName.isNotEmpty ? state.studentName : 'Educator',
+                                  emoji,
+                                  videoUrl: videoPath,
+                                );
+                              } else {
+                                Navigator.pop(ctx);
+                                final state = Provider.of<AppState>(context, listen: false);
+                                if (selectedType == 'Live Class') {
+                                  state.addLiveClass({
+                                    'subject': subjectCtrl.text,
+                                    'topic': topicCtrl.text,
+                                    'time': timeCtrl.text,
+                                    'status': selectedStatus,
+                                    'isLive': selectedStatus == 'LIVE NOW' || selectedStatus == 'LIVE IN 10 MINS',
+                                  });
+                                } else {
+                                  state.addVideoUpload({
+                                    'subject': subjectCtrl.text,
+                                    'topic': topicCtrl.text,
+                                    'dueDate': timeCtrl.text,
+                                    'status': selectedStatus,
+                                    'isCompleted': selectedStatus == 'Completed',
+                                  });
                                 }
                               }
                               ScaffoldMessenger.of(context).showSnackBar(
@@ -3087,6 +3115,7 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
 
   void _showRecordedLectureUploadSheet() {
     final TextEditingController topicCtrl = TextEditingController();
+    final TextEditingController durationCtrl = TextEditingController(text: '45 mins');
     String selectedSubject = '📐 Mathematics';
     String selectedClass = 'Class 10';
     String? pickedFileName;
@@ -3195,6 +3224,29 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
                       style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w600),
                       decoration: InputDecoration(
                         hintText: 'e.g. Quadratic Equations (Part 2)',
+                        filled: true,
+                        fillColor: const Color(0xFFF8FAFC),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide(color: Colors.grey[200]!),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide(color: Colors.grey[200]!),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    Text(
+                      'Lecture Duration',
+                      style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.bold, color: const Color(0xFF64748B)),
+                    ),
+                    const SizedBox(height: 6),
+                    TextField(
+                      controller: durationCtrl,
+                      style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w600),
+                      decoration: InputDecoration(
+                        hintText: 'e.g. 45 mins or 1 hour',
                         filled: true,
                         fillColor: const Color(0xFFF8FAFC),
                         border: OutlineInputBorder(
@@ -3328,14 +3380,15 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
                         const SizedBox(width: 12),
                         Expanded(
                           child: ElevatedButton(
-                            onPressed: (pickedFileName == null || topicCtrl.text.trim().isEmpty)
+                            onPressed: (pickedFileName == null || topicCtrl.text.trim().isEmpty || durationCtrl.text.trim().isEmpty)
                                 ? null
                                 : () {
                                     final topicName = topicCtrl.text.trim();
+                                    final durationVal = durationCtrl.text.trim();
                                     Navigator.pop(ctx); // Close sheet
                                     
                                     // Start the upload simulation!
-                                    _startRecordedUploadSimulation(topicName, selectedSubject, selectedClass, pickedFileName!);
+                                    _startRecordedUploadSimulation(topicName, selectedSubject, selectedClass, pickedFileName!, durationVal, pickedFilePath);
                                   },
                             style: ElevatedButton.styleFrom(
                               backgroundColor: const Color(0xFF2563EB),
@@ -3367,7 +3420,14 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
     );
   }
 
-  void _startRecordedUploadSimulation(String topic, String subject, String targetClass, String filename) {
+  void _startRecordedUploadSimulation(
+    String topic,
+    String subject,
+    String targetClass,
+    String filename,
+    String durationText,
+    String? videoFilePath,
+  ) {
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -3392,9 +3452,10 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
                 // Add to AppState (include subject for context)
                 state.addRecordedLecture(
                   '$subject: $topic',
-                  'Recorded • 45 mins',
+                  'Recorded • $durationText',
                   state.studentName.isNotEmpty ? state.studentName : 'Educator',
                   emoji,
+                  videoUrl: videoFilePath,
                 );
                 
                 // Show success SnackBar
@@ -7412,6 +7473,7 @@ class _NotesUploaderPageState extends State<NotesUploaderPage> {
   final _sizeCtrl = TextEditingController();
   final _pagesCtrl = TextEditingController();
   String _subject = 'Mathematics';
+  String? _pickedFilePath;
 
   @override
   void dispose() {
@@ -7432,6 +7494,7 @@ class _NotesUploaderPageState extends State<NotesUploaderPage> {
           _fileCtrl.text = image.name;
           _sizeCtrl.text = '1.4 MB';
           _pagesCtrl.text = '1';
+          _pickedFilePath = image.path;
         });
       }
     } catch (e) {
@@ -7439,7 +7502,7 @@ class _NotesUploaderPageState extends State<NotesUploaderPage> {
     }
   }
 
-  void _showProperFileBrowser(Function(String name, String size, int pages) onSelected) {
+  void _showProperFileBrowser(Function(String name, String size, int pages, String path) onSelected) {
     showDialog(
       context: context,
       builder: (ctx) {
@@ -7470,7 +7533,7 @@ class _NotesUploaderPageState extends State<NotesUploaderPage> {
                       final double sizeMb = file.size / (1024 * 1024);
                       final String sizeStr = '${sizeMb.toStringAsFixed(1)} MB';
                       final int simulatedPages = (file.size / 80000).clamp(1, 100).toInt();
-                      onSelected(file.name, sizeStr, simulatedPages);
+                      onSelected(file.name, sizeStr, simulatedPages, file.path!);
                     }
                   } catch (e) {
                     print('Error picking file: $e');
@@ -7590,11 +7653,12 @@ class _NotesUploaderPageState extends State<NotesUploaderPage> {
                 iconColor: const Color(0xFFF59E0B),
                 onTap: () {
                   Navigator.pop(context);
-                  _showProperFileBrowser((name, size, pages) {
+                  _showProperFileBrowser((name, size, pages, path) {
                     setState(() {
                       _fileCtrl.text = name;
                       _sizeCtrl.text = size;
                       _pagesCtrl.text = pages.toString();
+                      _pickedFilePath = path;
                     });
                   });
                 },
@@ -7712,6 +7776,7 @@ class _NotesUploaderPageState extends State<NotesUploaderPage> {
                         _fileCtrl.clear();
                         _sizeCtrl.clear();
                         _pagesCtrl.clear();
+                        _pickedFilePath = null;
                       });
                     },
                   )
@@ -7809,12 +7874,14 @@ class _NotesUploaderPageState extends State<NotesUploaderPage> {
                       fileSize: _sizeCtrl.text.isEmpty ? '1.0 MB' : _sizeCtrl.text.trim(),
                       pages: int.tryParse(_pagesCtrl.text) ?? 5,
                       uploadedBy: state.studentName,
+                      filePath: _pickedFilePath ?? '',
                     );
                     _titleCtrl.clear();
                     _descCtrl.clear();
                     _fileCtrl.clear();
                     _sizeCtrl.clear();
                     _pagesCtrl.clear();
+                    _pickedFilePath = null;
                     Navigator.pop(context);
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(content: Text('PDF Notes uploaded successfully!'), backgroundColor: AdyapanTheme.green)
@@ -9036,6 +9103,7 @@ class DoubtSolverPage extends StatefulWidget {
 
 class _DoubtSolverPageState extends State<DoubtSolverPage> {
   int _selectedFilterIndex = 0; // 0 = All, 1 = Pending, 2 = Solved
+  Timer? _pollTimer;
 
   @override
   void initState() {
@@ -9043,6 +9111,17 @@ class _DoubtSolverPageState extends State<DoubtSolverPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Provider.of<AppState>(context, listen: false).syncDoubtsFromDb();
     });
+    _pollTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
+      if (mounted) {
+        Provider.of<AppState>(context, listen: false).syncDoubtsFromDb();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _pollTimer?.cancel();
+    super.dispose();
   }
 
   Widget _buildFilterChips(AppState state, List<Map<String, dynamic>> doubts) {
@@ -11855,6 +11934,50 @@ class _TeacherArcadeConsolePageState extends State<TeacherArcadeConsolePage> wit
       ],
     );
   }
+}
+
+Future<String?> _showDurationDialog(BuildContext context, String title) async {
+  final ctrl = TextEditingController(text: '45 mins');
+  final state = Provider.of<AppState>(context, listen: false);
+  return showDialog<String>(
+    context: context,
+    builder: (ctx) {
+      return AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(state.translate('Enter Video Duration'), style: GoogleFonts.fredoka(fontWeight: FontWeight.bold)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(state.translate('Specify the duration for:') + ' "$title"', style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey[600])),
+            const SizedBox(height: 12),
+            TextField(
+              controller: ctrl,
+              autofocus: true,
+              style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.bold),
+              decoration: InputDecoration(
+                hintText: 'e.g. 15 mins, 1 hour',
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, null),
+            child: Text(state.translate('Cancel'), style: GoogleFonts.fredoka()),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2563EB)),
+            child: Text('OK', style: GoogleFonts.fredoka(color: Colors.white)),
+          ),
+        ],
+      );
+    },
+  );
 }
 
 

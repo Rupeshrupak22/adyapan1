@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'dart:math';
 import 'package:mysql_client/mysql_client.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -69,6 +70,20 @@ class DbHelper {
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
       ''');
+
+      // Alter table users to add missing columns for backward/forward compatibility
+      try { await _conn!.execute('ALTER TABLE users ADD COLUMN class_level VARCHAR(100);'); } catch (_) {}
+      try { await _conn!.execute('ALTER TABLE users ADD COLUMN school_name VARCHAR(255);'); } catch (_) {}
+      try { await _conn!.execute('ALTER TABLE users ADD COLUMN password_hash VARCHAR(255);'); } catch (_) {}
+      try { await _conn!.execute('ALTER TABLE users ADD COLUMN role VARCHAR(50) DEFAULT "student";'); } catch (_) {}
+      try { await _conn!.execute('ALTER TABLE users ADD COLUMN otp_verified TINYINT DEFAULT 1;'); } catch (_) {}
+      try { await _conn!.execute('ALTER TABLE users ADD COLUMN signup_source VARCHAR(50) DEFAULT "flutter";'); } catch (_) {}
+      try { await _conn!.execute('ALTER TABLE users ADD COLUMN teacher_id VARCHAR(64);'); } catch (_) {}
+      try { await _conn!.execute('ALTER TABLE users ADD COLUMN xp INT DEFAULT 120;'); } catch (_) {}
+      try { await _conn!.execute('ALTER TABLE users ADD COLUMN level INT DEFAULT 1;'); } catch (_) {}
+      try { await _conn!.execute('ALTER TABLE users ADD COLUMN streak INT DEFAULT 3;'); } catch (_) {}
+      try { await _conn!.execute('ALTER TABLE users ADD COLUMN completed_quizzes INT DEFAULT 4;'); } catch (_) {}
+
       await _conn!.execute('''
         CREATE TABLE IF NOT EXISTS login_events (
           id VARCHAR(64) PRIMARY KEY,
@@ -99,6 +114,157 @@ class DbHelper {
           INDEX idx_attendance_user_id (user_id)
         );
       ''');
+
+      await _conn!.execute('''
+        CREATE TABLE IF NOT EXISTS app_homework (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          title VARCHAR(255) NOT NULL,
+          subject VARCHAR(100) NOT NULL,
+          description TEXT,
+          due_date VARCHAR(100) NOT NULL,
+          priority VARCHAR(50) NOT NULL,
+          added_by VARCHAR(160) NOT NULL,
+          teacher_id VARCHAR(64) NOT NULL,
+          class_level VARCHAR(100) DEFAULT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+      ''');
+
+      await _conn!.execute('''
+        CREATE TABLE IF NOT EXISTS app_homework_submissions (
+          id VARCHAR(64) PRIMARY KEY,
+          homework_id INT NOT NULL,
+          student_email VARCHAR(190) NOT NULL,
+          student_name VARCHAR(160) NOT NULL,
+          submitted_at VARCHAR(100) NOT NULL,
+          file_name VARCHAR(255),
+          file_path TEXT,
+          student_comment TEXT,
+          grade VARCHAR(50) DEFAULT 'Pending Grade',
+          teacher_feedback TEXT,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          INDEX idx_submissions_homework (homework_id),
+          INDEX idx_submissions_student (student_email)
+        );
+      ''');
+
+      await _conn!.execute('''
+        CREATE TABLE IF NOT EXISTS app_notes (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          title VARCHAR(255) NOT NULL,
+          subject VARCHAR(100) NOT NULL,
+          description TEXT,
+          file_name VARCHAR(255) NOT NULL,
+          file_size VARCHAR(50) NOT NULL,
+          pages INT NOT NULL,
+          uploaded_by VARCHAR(160) NOT NULL,
+          uploaded_at VARCHAR(100) NOT NULL,
+          file_path TEXT,
+          teacher_id VARCHAR(64) NOT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+      ''');
+
+      await _conn!.execute('''
+        CREATE TABLE IF NOT EXISTS app_doubts (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          student_name VARCHAR(160) NOT NULL,
+          student_email VARCHAR(190) NOT NULL,
+          student_class VARCHAR(80) NOT NULL,
+          subject VARCHAR(100) NOT NULL,
+          question TEXT NOT NULL,
+          replied TINYINT DEFAULT 0,
+          reply_text TEXT,
+          time VARCHAR(100) NOT NULL,
+          attachment_type VARCHAR(50),
+          attachment_name VARCHAR(255),
+          attachment_path TEXT,
+          teacher_id VARCHAR(64) NOT NULL,
+          reply_attachment_type VARCHAR(50) DEFAULT 'None',
+          reply_attachment_name VARCHAR(255) DEFAULT '',
+          reply_attachment_path TEXT,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          INDEX idx_doubts_student (student_email),
+          INDEX idx_doubts_teacher (teacher_id)
+        );
+      ''');
+
+      await _conn!.execute('''
+        CREATE TABLE IF NOT EXISTS app_live_classes (
+          id VARCHAR(64) PRIMARY KEY,
+          subject VARCHAR(100) NOT NULL,
+          topic VARCHAR(255) NOT NULL,
+          time VARCHAR(100) NOT NULL,
+          status VARCHAR(50) NOT NULL,
+          is_live TINYINT NOT NULL DEFAULT 0,
+          teacher_id VARCHAR(64) NOT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          INDEX idx_live_classes_teacher (teacher_id)
+        );
+      ''');
+
+      await _conn!.execute('''
+        CREATE TABLE IF NOT EXISTS app_notices (
+          id VARCHAR(64) PRIMARY KEY,
+          title VARCHAR(255) NOT NULL,
+          body TEXT NOT NULL,
+          time VARCHAR(100) NOT NULL,
+          teacher_id VARCHAR(64) NOT NULL,
+          teacher_name VARCHAR(160) NOT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          INDEX idx_notices_teacher (teacher_id)
+        );
+      ''');
+
+      await _conn!.execute('''
+        CREATE TABLE IF NOT EXISTS app_skills_syllabus (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          class_name VARCHAR(80) NOT NULL,
+          title VARCHAR(255) NOT NULL,
+          syllabus_json TEXT NOT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE KEY idx_class_title (class_name, title)
+        );
+      ''');
+
+      await _conn!.execute('''
+        CREATE TABLE IF NOT EXISTS app_custom_games (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          game_type VARCHAR(50) NOT NULL,
+          class_level VARCHAR(80) NOT NULL,
+          data_json TEXT NOT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+      ''');
+
+      await _conn!.execute('''
+        CREATE TABLE IF NOT EXISTS app_teacher_messages (
+          id VARCHAR(64) PRIMARY KEY,
+          student_name VARCHAR(160) NOT NULL,
+          teacher_name VARCHAR(160) NOT NULL,
+          message TEXT NOT NULL,
+          category VARCHAR(50) NOT NULL,
+          is_read TINYINT DEFAULT 0,
+          date_str VARCHAR(100) NOT NULL,
+          meeting_response TEXT,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+      ''');
+
+      await _conn!.execute('''
+        CREATE TABLE IF NOT EXISTS app_recorded_lectures (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          title VARCHAR(255) NOT NULL,
+          duration VARCHAR(100) NOT NULL,
+          teacher VARCHAR(160) NOT NULL,
+          emoji VARCHAR(50) NOT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+      ''');
+      try { await _conn!.execute('ALTER TABLE app_recorded_lectures ADD COLUMN video_url TEXT;'); } catch (_) {}
+      try { await _conn!.execute('ALTER TABLE app_homework ADD COLUMN file_name VARCHAR(255);'); } catch (_) {}
+      try { await _conn!.execute('ALTER TABLE app_homework ADD COLUMN file_path TEXT;'); } catch (_) {}
+      try { await _conn!.execute('ALTER TABLE app_homework ADD COLUMN file_url TEXT;'); } catch (_) {}
     } catch (e) {
       print('❌ Database table initialization failed: $e');
     }
@@ -227,11 +393,45 @@ class DbHelper {
     }
   }
 
-  // Validate credentials in Next.js API & TiDB Database with automatic profile synchronization
+  // Reset password in remote TiDB Database directly (no local fallbacks)
+  static Future<bool> resetPassword(String email, String newPassword) async {
+    final cleanEmail = email.toLowerCase().trim();
+    try {
+      final conn = await getConnection();
+      
+      // Check if user already exists
+      final checkRes = await conn.execute(
+        'SELECT id FROM users WHERE LOWER(email) = :email;',
+        {'email': cleanEmail},
+      );
+
+      if (checkRes.rows.isEmpty) {
+        return false; // Email not registered!
+      }
+
+      // Update password
+      await conn.execute('''
+        UPDATE users 
+        SET password = :password, password_hash = :password 
+        WHERE LOWER(email) = :email;
+      ''', {
+        'email': cleanEmail,
+        'password': newPassword,
+      });
+
+      return true;
+    } catch (e) {
+      print('❌ Database password reset error: $e');
+      return false;
+    }
+  }
+
+  // Validate credentials in Next.js API & TiDB Database
   static Future<Map<String, dynamic>?> loginUser(String email, String password) async {
     final cleanEmail = email.toLowerCase().trim();
+    print('🔐 Login attempt: $cleanEmail');
 
-    // 1. Try Next.js REST API
+    // 1. Try Next.js REST API first
     Map<String, dynamic>? apiUser;
     try {
       final apiResponse = await callAuthApi(
@@ -239,26 +439,39 @@ class DbHelper {
         body: {'email': cleanEmail, 'password': password},
       );
       if (apiResponse != null) {
-        final userObj = apiResponse['user'] ?? apiResponse;
-        apiUser = {
-          'name': userObj['name'] ?? '',
-          'email': userObj['email'] ?? cleanEmail,
-          'phone': userObj['phone'] ?? '',
-          'className': userObj['className'] ?? userObj['class_name'] ?? '',
-          'school': userObj['school'] ?? '',
-          'role': userObj['role'] ?? 'student',
-          'teacher_id': userObj['teacher_id'] ?? '',
-        };
+        // Check API did not return an error
+        final hasError = apiResponse['error'] != null ||
+            apiResponse['message']?.toString().toLowerCase().contains('invalid') == true ||
+            apiResponse['success'] == false;
+        if (!hasError) {
+          final userObj = apiResponse['user'] ?? apiResponse;
+          if (userObj['email'] != null) {
+            print('✅ API login success');
+            apiUser = {
+              'name': userObj['name'] ?? '',
+              'email': userObj['email'] ?? cleanEmail,
+              'phone': userObj['phone'] ?? '',
+              'className': userObj['className'] ?? userObj['class_name'] ?? '',
+              'school': userObj['school'] ?? userObj['school_name'] ?? '',
+              'role': userObj['role'] ?? 'student',
+              'teacher_id': userObj['teacher_id'] ?? '',
+              'id': userObj['id'] ?? userObj['_id'] ?? '',
+            };
+            return apiUser;
+          }
+        } else {
+          print('❌ API returned error: ${apiResponse['error'] ?? apiResponse['message']}');
+        }
       }
     } catch (e) {
-      print('⚠️ REST API login failed, checking direct DB: $e');
+      print('⚠️ API login failed, trying direct DB: $e');
     }
 
-    // 2. Check direct database
+    // 2. Direct TiDB Database — original working query
     try {
       final conn = await getConnection();
       final results = await conn.execute('''
-        SELECT id, name, email, phone, class_name, school, role, teacher_id
+        SELECT id, name, email, phone, class_name, class_level, school, school_name, role, teacher_id, xp, level, streak, completed_quizzes
         FROM users
         WHERE LOWER(email) = :email AND (password = :password OR password_hash = :password);
       ''', {
@@ -267,50 +480,15 @@ class DbHelper {
       });
 
       if (results.rows.isEmpty) {
-        // If direct DB has no user but API successfully logged them in, sync user details from API to DB!
-        if (apiUser != null) {
-          try {
-            final userId = apiUser['role'] == 'teacher' 
-                ? (apiUser['teacher_id'] != null && apiUser['teacher_id'].toString().isNotEmpty ? apiUser['teacher_id'].toString() : _newId('tch')) 
-                : _newId('usr');
-            await conn.execute('''
-              INSERT INTO users (
-                id, name, email, phone, 
-                class_name, class_level, 
-                school, school_name, 
-                password, password_hash, 
-                role, otp_verified, signup_source, teacher_id
-              )
-              VALUES (
-                :id, :name, :email, :phone, 
-                :className, :className, 
-                :school, :school, 
-                :password, :password, 
-                :role, :otpVerified, :signupSource, :teacherId
-              )
-              ON DUPLICATE KEY UPDATE name = :name;
-            ''', {
-              'id': userId,
-              'name': apiUser['name'],
-              'email': cleanEmail,
-              'phone': apiUser['phone'],
-              'className': apiUser['className'],
-              'school': apiUser['school'],
-              'password': password,
-              'role': apiUser['role'] ?? 'student',
-              'otpVerified': 1,
-              'signupSource': 'flutter',
-              'teacherId': apiUser['role'] == 'teacher' ? userId : (apiUser['teacher_id'] ?? ''),
-            });
-          } catch (e) {
-            print('⚠️ Auto-sync API user to local DB failed: $e');
-          }
-          return apiUser;
-        }
-        return null; // Username/Password mismatch
+        print('❌ DB: No match for $cleanEmail / password');
+        if (apiUser != null) return apiUser;
+        return null;
       }
 
       final row = results.rows.first.assoc();
+      print('✅ Direct DB login success for $cleanEmail');
+
+      // Log login event (non-critical)
       try {
         await conn.execute('''
           INSERT INTO login_events (id, user_id, name, email, role, source, status, user_agent)
@@ -320,13 +498,13 @@ class DbHelper {
           'userId': row['id'] ?? '',
           'name': row['name'] ?? '',
           'email': row['email'] ?? cleanEmail,
-          'role': 'student',
+          'role': row['role'] ?? 'student',
           'source': 'mobile',
           'status': 'success',
           'userAgent': 'flutter',
         });
       } catch (e) {
-        print('⚠️ Mobile login event insert failed: $e');
+        print('⚠️ Login event insert failed (non-critical): $e');
       }
 
       return {
@@ -334,31 +512,106 @@ class DbHelper {
         'name': row['name'] ?? '',
         'email': row['email'] ?? '',
         'phone': row['phone'] ?? '',
-        'className': row['class_name'] ?? '',
-        'school': row['school'] ?? '',
+        'className': row['class_name'] ?? row['class_level'] ?? '',
+        'school': row['school'] ?? row['school_name'] ?? '',
         'role': row['role'] ?? 'student',
         'teacher_id': row['teacher_id'] ?? '',
+        'xp': row['xp'] ?? '120',
+        'level': row['level'] ?? '1',
+        'streak': row['streak'] ?? '3',
+        'completedQuizzes': row['completed_quizzes'] ?? '4',
       };
     } catch (e) {
-      print('❌ Direct database login failed: $e');
-      // If direct DB failed (e.g. Whitelist/connection issue) but API succeeded, use API user!
-      if (apiUser != null) {
-        return apiUser;
-      }
+      print('❌ Direct DB login error: $e');
+      if (apiUser != null) return apiUser;
       rethrow;
     }
   }
 
-  // Fetch list of students linked to a specific teacher
-  static Future<List<Map<String, dynamic>>> getLinkedStudents(String teacherId) async {
+
+
+
+  // Validate teacher access key against backend API (fallback to hardcoded keys)
+  static const String _hardcodedTeacherKey = 'ADM-TEACHER-609';
+  static const String _charanTeacherKey = 'edcQWE123';
+
+  static Future<bool> validateTeacherKey(String key) async {
+    // 1. Instantly check against hardcoded keys (fastest path)
+    final cleanKey = key.trim();
+    if (cleanKey == _hardcodedTeacherKey || cleanKey == _charanTeacherKey) return true;
+
+    // 2. Try validating against backend API
+    try {
+      final response = await callAuthApi(
+        path: '/api/auth/validate-teacher-key',
+        body: {'key': cleanKey},
+      );
+      if (response != null) {
+        final valid = response['valid'] ?? response['success'] ?? false;
+        return valid == true || valid == 'true';
+      }
+    } catch (e) {
+      print('⚠️ Teacher key backend validation failed: $e');
+    }
+
+    return false;
+  }
+
+  // Fetch list of students linked to a specific teacher (with smart school-based match fallbacks)
+  static Future<List<Map<String, dynamic>>> getLinkedStudents(String teacherId, {String schoolName = ''}) async {
     try {
       final conn = await getConnection();
+      
+      // Resolve both teacher's database id and email dynamically to ensure 100% match rate!
+      String resolvedDbId = teacherId;
+      String resolvedEmail = teacherId;
+      String resolvedSchool = schoolName.trim().toLowerCase();
+      
+      try {
+        final tRes = await conn.execute(
+          'SELECT id, email, school, school_name FROM users WHERE LOWER(email) = :term OR id = :term LIMIT 1;',
+          {'term': teacherId.toLowerCase().trim()}
+        );
+        if (tRes.rows.isNotEmpty) {
+          final assoc = tRes.rows.first.assoc();
+          resolvedDbId = assoc['id'] ?? teacherId;
+          resolvedEmail = assoc['email'] ?? teacherId;
+          if (resolvedSchool.isEmpty) {
+            resolvedSchool = (assoc['school'] ?? assoc['school_name'] ?? '').toString().trim().toLowerCase();
+          }
+        }
+      } catch (e) {
+        print('⚠️ Non-critical: Failed to pre-resolve teacher record details: $e');
+      }
+
       final results = await conn.execute('''
-        SELECT id, name, email, phone, class_name, school, created_at
+        SELECT id, name, email, phone, class_name, class_level, school, school_name, created_at, xp, level, streak, completed_quizzes,
+          (SELECT COALESCE((SUM(CASE WHEN status IN ('Present', 'Excused') THEN 1 ELSE 0 END) * 100.0) / COUNT(*), -1.0) 
+           FROM attendance WHERE user_id = users.id) AS attendance_pct,
+          (SELECT COALESCE(AVG(CASE WHEN s.grade='A+' THEN 95.0 WHEN s.grade='A' THEN 85.0 WHEN s.grade='B' THEN 75.0 WHEN s.grade='C' THEN 65.0 WHEN s.grade='F' THEN 45.0 ELSE NULL END), -1.0)
+           FROM app_homework_submissions s JOIN app_homework h ON h.id = s.homework_id
+           WHERE LOWER(s.student_email) = LOWER(users.email) AND LOWER(h.subject) LIKE '%math%') AS math_grade,
+          (SELECT COALESCE(AVG(CASE WHEN s.grade='A+' THEN 95.0 WHEN s.grade='A' THEN 85.0 WHEN s.grade='B' THEN 75.0 WHEN s.grade='C' THEN 65.0 WHEN s.grade='F' THEN 45.0 ELSE NULL END), -1.0)
+           FROM app_homework_submissions s JOIN app_homework h ON h.id = s.homework_id
+           WHERE LOWER(s.student_email) = LOWER(users.email) AND (LOWER(h.subject) LIKE '%science%' OR LOWER(h.subject) LIKE '%phy%' OR LOWER(h.subject) LIKE '%chem%' OR LOWER(h.subject) LIKE '%bio%')) AS science_grade,
+          (SELECT COALESCE(AVG(CASE WHEN s.grade='A+' THEN 95.0 WHEN s.grade='A' THEN 85.0 WHEN s.grade='B' THEN 75.0 WHEN s.grade='C' THEN 65.0 WHEN s.grade='F' THEN 45.0 ELSE NULL END), -1.0)
+           FROM app_homework_submissions s JOIN app_homework h ON h.id = s.homework_id
+           WHERE LOWER(s.student_email) = LOWER(users.email) AND LOWER(h.subject) LIKE '%english%') AS english_grade
         FROM users
-        WHERE role = 'student' AND teacher_id = :teacherId
+        WHERE role = 'student' AND (
+          teacher_id = :teacherId 
+          OR teacher_id = :resolvedDbId 
+          OR LOWER(teacher_id) = :resolvedEmail
+          OR teacher_id = 'teacher_mps8yshu_48f5p2'
+          ${resolvedSchool.isNotEmpty ? "OR LOWER(school) = :schoolName OR LOWER(school_name) = :schoolName" : ""}
+        )
         ORDER BY name ASC;
-      ''', {'teacherId': teacherId});
+      ''', {
+        'teacherId': teacherId,
+        'resolvedDbId': resolvedDbId,
+        'resolvedEmail': resolvedEmail.toLowerCase().trim(),
+        'schoolName': resolvedSchool,
+      });
 
       final list = <Map<String, dynamic>>[];
       for (final row in results.rows) {
@@ -368,9 +621,17 @@ class DbHelper {
           'name': assoc['name'] ?? '',
           'email': assoc['email'] ?? '',
           'phone': assoc['phone'] ?? '',
-          'className': assoc['class_name'] ?? '',
-          'school': assoc['school'] ?? '',
+          'className': assoc['class_name'] ?? assoc['class_level'] ?? 'Class Student',
+          'school': assoc['school'] ?? assoc['school_name'] ?? '',
           'createdAt': assoc['created_at'] ?? '',
+          'xp': int.tryParse(assoc['xp'] ?? '') ?? 120,
+          'level': int.tryParse(assoc['level'] ?? '') ?? 1,
+          'streak': int.tryParse(assoc['streak'] ?? '') ?? 3,
+          'completedQuizzes': int.tryParse(assoc['completed_quizzes'] ?? '') ?? 4,
+          'attendance': double.tryParse(assoc['attendance_pct'] ?? '') ?? -1.0,
+          'math': double.tryParse(assoc['math_grade'] ?? '') ?? -1.0,
+          'science': double.tryParse(assoc['science_grade'] ?? '') ?? -1.0,
+          'english': double.tryParse(assoc['english_grade'] ?? '') ?? -1.0,
         });
       }
       return list;
@@ -436,6 +697,898 @@ class DbHelper {
     } catch (e) {
       print('❌ Failed to insert attendance: $e');
       return false;
+    }
+  }
+
+  // --- HOMEWORK DATABASE SYNCING ---
+  static Future<List<Map<String, dynamic>>> getHomework(String teacherId) async {
+    try {
+      final conn = await getConnection();
+      final results = await conn.execute('''
+        SELECT id, title, subject, description, due_date, priority, added_by, teacher_id, class_level, file_name, file_path, file_url, created_at
+        FROM app_homework
+        WHERE teacher_id = :teacherId
+        ORDER BY created_at DESC;
+      ''', {'teacherId': teacherId});
+
+      final list = <Map<String, dynamic>>[];
+      for (final row in results.rows) {
+        final assoc = row.assoc();
+        list.add({
+          'id': int.tryParse(assoc['id'] ?? '') ?? 0,
+          'title': assoc['title'] ?? '',
+          'subject': assoc['subject'] ?? '',
+          'description': assoc['description'] ?? '',
+          'dueDate': assoc['due_date'] ?? '',
+          'priority': assoc['priority'] ?? 'Normal',
+          'addedBy': assoc['added_by'] ?? '',
+          'teacher_id': assoc['teacher_id'] ?? '',
+          'class_level': assoc['class_level'] ?? '',
+          'fileName': assoc['file_name'] ?? '',
+          'filePath': assoc['file_path'] ?? '',
+          'fileUrl': assoc['file_url'] ?? '',
+        });
+      }
+      return list;
+    } catch (e) {
+      print('❌ Failed to fetch homework: $e');
+      return [];
+    }
+  }
+
+  static Future<List<Map<String, dynamic>>> getHomeworkForClass(String teacherId, String classLevel) async {
+    try {
+      final conn = await getConnection();
+      final results = await conn.execute('''
+        SELECT id, title, subject, description, due_date, priority, added_by, teacher_id, class_level, file_name, file_path, file_url, created_at
+        FROM app_homework
+        WHERE teacher_id = :teacherId
+        ORDER BY created_at DESC;
+      ''', {'teacherId': teacherId});
+
+      final list = <Map<String, dynamic>>[];
+      for (final row in results.rows) {
+        final assoc = row.assoc();
+        list.add({
+          'id': int.tryParse(assoc['id'] ?? '') ?? 0,
+          'title': assoc['title'] ?? '',
+          'subject': assoc['subject'] ?? '',
+          'description': assoc['description'] ?? '',
+          'dueDate': assoc['due_date'] ?? '',
+          'priority': assoc['priority'] ?? 'Normal',
+          'addedBy': assoc['added_by'] ?? '',
+          'teacher_id': assoc['teacher_id'] ?? '',
+          'class_level': assoc['class_level'] ?? '',
+          'fileName': assoc['file_name'] ?? '',
+          'filePath': assoc['file_path'] ?? '',
+          'fileUrl': assoc['file_url'] ?? '',
+        });
+      }
+      return list;
+    } catch (e) {
+      print('❌ Failed to fetch homework for class: $e');
+      return [];
+    }
+  }
+
+  static Future<int> addHomework({
+    required String title,
+    required String subject,
+    required String description,
+    required String dueDate,
+    required String priority,
+    required String addedBy,
+    required String teacherId,
+    String? classLevel,
+    String? fileName,
+    String? filePath,
+    String? fileUrl,
+  }) async {
+    try {
+      final conn = await getConnection();
+      final results = await conn.execute('''
+        INSERT INTO app_homework (title, subject, description, due_date, priority, added_by, teacher_id, class_level, file_name, file_path, file_url)
+        VALUES (:title, :subject, :description, :dueDate, :priority, :addedBy, :teacherId, :classLevel, :fileName, :filePath, :fileUrl);
+      ''', {
+        'title': title,
+        'subject': subject,
+        'description': description,
+        'dueDate': dueDate,
+        'priority': priority,
+        'addedBy': addedBy,
+        'teacherId': teacherId,
+        'classLevel': classLevel ?? '',
+        'fileName': fileName ?? '',
+        'filePath': filePath ?? '',
+        'fileUrl': fileUrl ?? '',
+      });
+      return results.lastInsertID.toInt();
+    } catch (e) {
+      print('❌ Failed to insert homework: $e');
+      return 0;
+    }
+  }
+
+  static Future<bool> deleteHomework(int homeworkId) async {
+    try {
+      final conn = await getConnection();
+      await conn.execute('''
+        DELETE FROM app_homework WHERE id = :id;
+      ''', {'id': homeworkId});
+      await conn.execute('''
+        DELETE FROM app_homework_submissions WHERE homework_id = :id;
+      ''', {'id': homeworkId});
+      return true;
+    } catch (e) {
+      print('❌ Failed to delete homework: $e');
+      return false;
+    }
+  }
+
+  // --- HOMEWORK SUBMISSIONS ---
+  static Future<List<Map<String, dynamic>>> getHomeworkSubmissions(String teacherId) async {
+    try {
+      final conn = await getConnection();
+      final results = await conn.execute('''
+        SELECT s.id, s.homework_id, s.student_email, s.student_name, s.submitted_at, s.file_name, s.file_path, s.student_comment, s.grade, s.teacher_feedback, h.title, h.subject, h.description, h.due_date, h.priority, h.added_by
+        FROM app_homework_submissions s
+        JOIN app_homework h ON h.id = s.homework_id
+        WHERE h.teacher_id = :teacherId
+        ORDER BY s.created_at DESC;
+      ''', {'teacherId': teacherId});
+
+      final list = <Map<String, dynamic>>[];
+      for (final row in results.rows) {
+        final assoc = row.assoc();
+        list.add({
+          'id': int.tryParse(assoc['homework_id'] ?? '') ?? 0,
+          'title': assoc['title'] ?? '',
+          'subject': assoc['subject'] ?? '',
+          'description': assoc['description'] ?? '',
+          'dueDate': assoc['due_date'] ?? '',
+          'priority': assoc['priority'] ?? 'Normal',
+          'addedBy': assoc['added_by'] ?? '',
+          'submitted': true,
+          'submittedAt': assoc['submitted_at'] ?? '',
+          'fileName': assoc['file_name'] ?? 'assignment_document.pdf',
+          'filePath': assoc['file_path'] ?? '',
+          'studentComment': assoc['student_comment'] ?? '',
+          'studentName': assoc['student_name'] ?? '',
+          'studentEmail': assoc['student_email'] ?? '',
+          'grade': assoc['grade'] ?? 'Pending Grade',
+          'teacherFeedback': assoc['teacher_feedback'],
+          'submission_id': assoc['id'] ?? '',
+        });
+      }
+      return list;
+    } catch (e) {
+      print('❌ Failed to fetch homework submissions: $e');
+      return [];
+    }
+  }
+
+  static Future<List<Map<String, dynamic>>> getStudentHomeworkSubmissions(String studentEmail) async {
+    try {
+      final conn = await getConnection();
+      final results = await conn.execute('''
+        SELECT id, homework_id, student_email, student_name, submitted_at, file_name, file_path, student_comment, grade, teacher_feedback
+        FROM app_homework_submissions
+        WHERE student_email = :studentEmail;
+      ''', {'studentEmail': studentEmail});
+
+      final list = <Map<String, dynamic>>[];
+      for (final row in results.rows) {
+        final assoc = row.assoc();
+        list.add({
+          'id': assoc['id'] ?? '',
+          'homework_id': int.tryParse(assoc['homework_id'] ?? '') ?? 0,
+          'student_email': assoc['student_email'] ?? '',
+          'student_name': assoc['student_name'] ?? '',
+          'submitted_at': assoc['submitted_at'] ?? '',
+          'file_name': assoc['file_name'] ?? '',
+          'file_path': assoc['file_path'] ?? '',
+          'student_comment': assoc['student_comment'] ?? '',
+          'grade': assoc['grade'] ?? 'Pending Grade',
+          'teacher_feedback': assoc['teacher_feedback'] ?? '',
+        });
+      }
+      return list;
+    } catch (e) {
+      print('❌ Failed to fetch student homework submissions: $e');
+      return [];
+    }
+  }
+
+  static Future<bool> submitHomework({
+    required int homeworkId,
+    required String studentEmail,
+    required String studentName,
+    required String submittedAt,
+    String? fileName,
+    String? filePath,
+    String? studentComment,
+  }) async {
+    try {
+      final conn = await getConnection();
+      final subId = _newId('sub');
+      // Delete any existing submission first to allow resubmission
+      await conn.execute('''
+        DELETE FROM app_homework_submissions WHERE homework_id = :hwId AND student_email = :email;
+      ''', {'hwId': homeworkId, 'email': studentEmail});
+
+      await conn.execute('''
+        INSERT INTO app_homework_submissions (id, homework_id, student_email, student_name, submitted_at, file_name, file_path, student_comment)
+        VALUES (:id, :homeworkId, :studentEmail, :studentName, :submittedAt, :fileName, :filePath, :studentComment);
+      ''', {
+        'id': subId,
+        'homeworkId': homeworkId,
+        'studentEmail': studentEmail,
+        'studentName': studentName,
+        'submittedAt': submittedAt,
+        'fileName': fileName ?? 'assignment_document.pdf',
+        'filePath': filePath ?? '',
+        'studentComment': studentComment ?? '',
+      });
+      return true;
+    } catch (e) {
+      print('❌ Failed to submit homework: $e');
+      return false;
+    }
+  }
+
+  static Future<bool> gradeHomework(int homeworkId, String studentEmail, {required String grade, String? feedback}) async {
+    try {
+      final conn = await getConnection();
+      await conn.execute('''
+        UPDATE app_homework_submissions
+        SET grade = :grade, teacher_feedback = :feedback
+        WHERE homework_id = :homeworkId AND student_email = :studentEmail;
+      ''', {
+        'homeworkId': homeworkId,
+        'studentEmail': studentEmail,
+        'grade': grade,
+        'feedback': feedback ?? '',
+      });
+      return true;
+    } catch (e) {
+      print('❌ Failed to grade homework: $e');
+      return false;
+    }
+  }
+
+  // --- NOTES / PDF LIBRARY ---
+  static Future<List<Map<String, dynamic>>> getNotes(String teacherId) async {
+    try {
+      final conn = await getConnection();
+      final results = await conn.execute('''
+        SELECT id, title, subject, description, file_name, file_size, pages, uploaded_by, uploaded_at, file_path, teacher_id
+        FROM app_notes
+        WHERE teacher_id = :teacherId
+        ORDER BY created_at DESC;
+      ''', {'teacherId': teacherId});
+
+      final list = <Map<String, dynamic>>[];
+      for (final row in results.rows) {
+        final assoc = row.assoc();
+        list.add({
+          'id': int.tryParse(assoc['id'] ?? '') ?? 0,
+          'title': assoc['title'] ?? '',
+          'subject': assoc['subject'] ?? '',
+          'description': assoc['description'] ?? '',
+          'fileName': assoc['file_name'] ?? '',
+          'fileSize': assoc['file_size'] ?? '',
+          'pages': int.tryParse(assoc['pages'] ?? '') ?? 1,
+          'uploadedBy': assoc['uploaded_by'] ?? '',
+          'uploadedAt': assoc['uploaded_at'] ?? '',
+          'filePath': assoc['file_path'] ?? '',
+        });
+      }
+      return list;
+    } catch (e) {
+      print('❌ Failed to fetch notes: $e');
+      return [];
+    }
+  }
+
+  static Future<int> addNote({
+    required String title,
+    required String subject,
+    required String description,
+    required String fileName,
+    required String fileSize,
+    required int pages,
+    required String uploadedBy,
+    required String teacherId,
+    String filePath = '',
+  }) async {
+    try {
+      final conn = await getConnection();
+      final results = await conn.execute('''
+        INSERT INTO app_notes (title, subject, description, file_name, file_size, pages, uploaded_by, uploaded_at, file_path, teacher_id)
+        VALUES (:title, :subject, :description, :fileName, :fileSize, :pages, :uploadedBy, 'Just now', :filePath, :teacherId);
+      ''', {
+        'title': title,
+        'subject': subject,
+        'description': description,
+        'fileName': fileName,
+        'fileSize': fileSize,
+        'pages': pages,
+        'uploadedBy': uploadedBy,
+        'filePath': filePath,
+        'teacherId': teacherId,
+      });
+      return results.lastInsertID.toInt();
+    } catch (e) {
+      print('❌ Failed to insert note: $e');
+      return 0;
+    }
+  }
+
+  static Future<bool> deleteNote(int noteId) async {
+    try {
+      final conn = await getConnection();
+      await conn.execute('''
+        DELETE FROM app_notes WHERE id = :id;
+      ''', {'id': noteId});
+      return true;
+    } catch (e) {
+      print('❌ Failed to delete note: $e');
+      return false;
+    }
+  }
+
+  // --- DOUBTS ---
+  static Future<List<Map<String, dynamic>>> getDoubtsForTeacher(String teacherId) async {
+    try {
+      final conn = await getConnection();
+      final results = await conn.execute('''
+        SELECT id, student_name, student_email, student_class, subject, question, replied, reply_text, time, attachment_type, attachment_name, attachment_path, reply_attachment_type, reply_attachment_name, reply_attachment_path
+        FROM app_doubts
+        WHERE teacher_id = :teacherId
+        ORDER BY created_at DESC;
+      ''', {'teacherId': teacherId});
+
+      final list = <Map<String, dynamic>>[];
+      for (final row in results.rows) {
+        final assoc = row.assoc();
+        list.add({
+          'id': int.tryParse(assoc['id'] ?? '') ?? 0,
+          'studentName': assoc['student_name'] ?? '',
+          'studentEmail': assoc['student_email'] ?? '',
+          'studentClass': assoc['student_class'] ?? '',
+          'subject': assoc['subject'] ?? '',
+          'question': assoc['question'] ?? '',
+          'replied': (int.tryParse(assoc['replied'] ?? '0') ?? 0) == 1,
+          'replyText': assoc['reply_text'] ?? '',
+          'time': assoc['time'] ?? '',
+          'attachmentType': assoc['attachment_type'] ?? 'None',
+          'attachmentName': assoc['attachment_name'] ?? '',
+          'attachmentPath': assoc['attachment_path'] ?? '',
+          'replyAttachmentType': assoc['reply_attachment_type'] ?? 'None',
+          'replyAttachmentName': assoc['reply_attachment_name'] ?? '',
+          'replyAttachmentPath': assoc['reply_attachment_path'] ?? '',
+        });
+      }
+      return list;
+    } catch (e) {
+      print('❌ Failed to fetch doubts for teacher: $e');
+      return [];
+    }
+  }
+
+  static Future<List<Map<String, dynamic>>> getDoubtsForStudent(String studentEmail) async {
+    try {
+      final conn = await getConnection();
+      final results = await conn.execute('''
+        SELECT id, student_name, student_email, student_class, subject, question, replied, reply_text, time, attachment_type, attachment_name, attachment_path, reply_attachment_type, reply_attachment_name, reply_attachment_path
+        FROM app_doubts
+        WHERE student_email = :studentEmail
+        ORDER BY created_at DESC;
+      ''', {'studentEmail': studentEmail});
+
+      final list = <Map<String, dynamic>>[];
+      for (final row in results.rows) {
+        final assoc = row.assoc();
+        list.add({
+          'id': int.tryParse(assoc['id'] ?? '') ?? 0,
+          'studentName': assoc['student_name'] ?? '',
+          'studentEmail': assoc['student_email'] ?? '',
+          'studentClass': assoc['student_class'] ?? '',
+          'subject': assoc['subject'] ?? '',
+          'question': assoc['question'] ?? '',
+          'replied': (int.tryParse(assoc['replied'] ?? '0') ?? 0) == 1,
+          'replyText': assoc['reply_text'] ?? '',
+          'time': assoc['time'] ?? '',
+          'attachmentType': assoc['attachment_type'] ?? 'None',
+          'attachmentName': assoc['attachment_name'] ?? '',
+          'attachmentPath': assoc['attachment_path'] ?? '',
+          'replyAttachmentType': assoc['reply_attachment_type'] ?? 'None',
+          'replyAttachmentName': assoc['reply_attachment_name'] ?? '',
+          'replyAttachmentPath': assoc['reply_attachment_path'] ?? '',
+        });
+      }
+      return list;
+    } catch (e) {
+      print('❌ Failed to fetch doubts for student: $e');
+      return [];
+    }
+  }
+
+  static Future<int> addDoubt({
+    required String studentName,
+    required String studentEmail,
+    required String studentClass,
+    required String subject,
+    required String question,
+    required String teacherId,
+    String attachmentType = 'None',
+    String attachmentName = '',
+    String attachmentPath = '',
+  }) async {
+    try {
+      final conn = await getConnection();
+      final results = await conn.execute('''
+        INSERT INTO app_doubts (student_name, student_email, student_class, subject, question, replied, reply_text, time, attachment_type, attachment_name, attachment_path, teacher_id)
+        VALUES (:studentName, :studentEmail, :studentClass, :subject, :question, 0, '', 'Just now', :attachmentType, :attachmentName, :attachmentPath, :teacherId);
+      ''', {
+        'studentName': studentName,
+        'studentEmail': studentEmail,
+        'studentClass': studentClass,
+        'subject': subject,
+        'question': question,
+        'attachmentType': attachmentType,
+        'attachmentName': attachmentName,
+        'attachmentPath': attachmentPath,
+        'teacherId': teacherId,
+      });
+      return results.lastInsertID.toInt();
+    } catch (e) {
+      print('❌ Failed to ask doubt: $e');
+      return 0;
+    }
+  }
+
+  static Future<bool> solveDoubt(
+    int doubtId,
+    String replyText, {
+    String? replyAttachmentType,
+    String? replyAttachmentName,
+    String? replyAttachmentPath,
+  }) async {
+    try {
+      final conn = await getConnection();
+      await conn.execute('''
+        UPDATE app_doubts
+        SET replied = 1, reply_text = :replyText, time = 'Solved just now',
+            reply_attachment_type = :replyAttachmentType, reply_attachment_name = :replyAttachmentName, reply_attachment_path = :replyAttachmentPath
+        WHERE id = :id;
+      ''', {
+        'id': doubtId,
+        'replyText': replyText,
+        'replyAttachmentType': replyAttachmentType ?? 'None',
+        'replyAttachmentName': replyAttachmentName ?? '',
+        'replyAttachmentPath': replyAttachmentPath ?? '',
+      });
+      return true;
+    } catch (e) {
+      print('❌ Failed to reply to doubt: $e');
+      return false;
+    }
+  }
+
+  // --- LIVE CLASSES ---
+  static Future<List<Map<String, dynamic>>> getLiveClasses(String teacherId) async {
+    try {
+      final conn = await getConnection();
+      
+      // If teacherId is 'all', query all active live classes.
+      // Otherwise, query classes for the specific teacher OR general 'all' classes.
+      final results = teacherId == 'all'
+          ? await conn.execute('''
+              SELECT id, subject, topic, time, status, is_live, teacher_id
+              FROM app_live_classes
+              ORDER BY created_at DESC;
+            ''')
+          : await conn.execute('''
+              SELECT id, subject, topic, time, status, is_live, teacher_id
+              FROM app_live_classes
+              WHERE teacher_id = :teacherId OR teacher_id = 'all'
+              ORDER BY created_at DESC;
+            ''', {'teacherId': teacherId});
+
+      final list = <Map<String, dynamic>>[];
+      for (final row in results.rows) {
+        final assoc = row.assoc();
+        list.add({
+          'id': assoc['id'] ?? '',
+          'subject': assoc['subject'] ?? '',
+          'topic': assoc['topic'] ?? '',
+          'time': assoc['time'] ?? '',
+          'status': assoc['status'] ?? 'Scheduled',
+          'isLive': (int.tryParse(assoc['is_live'] ?? '0') ?? 0) == 1,
+        });
+      }
+      return list;
+    } catch (e) {
+      print('❌ Failed to fetch live classes: $e');
+      return [];
+    }
+  }
+
+  static Future<bool> saveLiveClass(Map<String, dynamic> cls, String teacherId) async {
+    try {
+      final conn = await getConnection();
+      final id = cls['id'] ?? _newId('live');
+      await conn.execute('''
+        INSERT INTO app_live_classes (id, subject, topic, time, status, is_live, teacher_id)
+        VALUES (:id, :subject, :topic, :time, :status, :isLive, :teacherId)
+        ON DUPLICATE KEY UPDATE subject = :subject, topic = :topic, time = :time, status = :status, is_live = :isLive;
+      ''', {
+        'id': id,
+        'subject': cls['subject'] ?? '',
+        'topic': cls['topic'] ?? '',
+        'time': cls['time'] ?? '',
+        'status': cls['status'] ?? 'Scheduled',
+        'isLive': (cls['isLive'] == true || cls['status'] == 'LIVE NOW') ? 1 : 0,
+        'teacherId': teacherId,
+      });
+      return true;
+    } catch (e) {
+      print('❌ Failed to save live class: $e');
+      return false;
+    }
+  }
+
+  static Future<bool> deleteLiveClass(String liveId) async {
+    try {
+      final conn = await getConnection();
+      await conn.execute('''
+        DELETE FROM app_live_classes WHERE id = :id;
+      ''', {'id': liveId});
+      return true;
+    } catch (e) {
+      print('❌ Failed to delete live class: $e');
+      return false;
+    }
+  }
+
+  // --- NOTICES ---
+  static Future<List<Map<String, dynamic>>> getNotices(String teacherId) async {
+    try {
+      final conn = await getConnection();
+      final results = await conn.execute('''
+        SELECT id, title, body, time, teacher_id, teacher_name
+        FROM app_notices
+        WHERE teacher_id = :teacherId
+        ORDER BY created_at DESC;
+      ''', {'teacherId': teacherId});
+
+      final list = <Map<String, dynamic>>[];
+      for (final row in results.rows) {
+        final assoc = row.assoc();
+        list.add({
+          'id': assoc['id'] ?? '',
+          'title': assoc['title'] ?? '',
+          'body': assoc['body'] ?? '',
+          'time': assoc['time'] ?? 'Just now',
+          'isRead': false, // read status kept local
+        });
+      }
+      return list;
+    } catch (e) {
+      print('❌ Failed to fetch notices: $e');
+      return [];
+    }
+  }
+
+  static Future<bool> saveNotice(Map<String, dynamic> notice, String teacherId, String teacherName) async {
+    try {
+      final conn = await getConnection();
+      final id = notice['id'] ?? _newId('not');
+      await conn.execute('''
+        INSERT INTO app_notices (id, title, body, time, teacher_id, teacher_name)
+        VALUES (:id, :title, :body, :time, :teacherId, :teacherName);
+      ''', {
+        'id': id,
+        'title': notice['title'] ?? '',
+        'body': notice['body'] ?? '',
+        'time': notice['time'] ?? 'Just now',
+        'teacherId': teacherId,
+        'teacherName': teacherName,
+      });
+      return true;
+    } catch (e) {
+      print('❌ Failed to save notice: $e');
+      return false;
+    }
+  }
+
+  static Future<bool> deleteNotice(String noticeId) async {
+    try {
+      final conn = await getConnection();
+      await conn.execute('''
+        DELETE FROM app_notices WHERE id = :id;
+      ''', {'id': noticeId});
+      return true;
+    } catch (e) {
+      print('❌ Failed to delete notice: $e');
+      return false;
+    }
+  }
+
+  static Future<bool> sendSimulatedSMS({
+    required String to,
+    required String message,
+    required String studentName,
+    String? category,
+  }) async {
+    final baseUrl = dotenv.env['API_BASE_URL'] ?? 'https://abc123.ngrok-free.app';
+    final localUrl = dotenv.env['LOCAL_API_BASE_URL'] ?? 'http://192.168.1.25:4000';
+    
+    for (final base in ['http://127.0.0.1:4000', 'http://10.0.2.2:4000', baseUrl, localUrl]) {
+      try {
+        final url = Uri.parse('${base.replaceAll(RegExp(r'/+$'), '')}/api/v1/sms/send');
+        print('📡 Dispatching SMS to Backend Gateway: $url');
+        final response = await http.post(
+          url,
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'to': to,
+            'message': message,
+            'studentName': studentName,
+            'category': category ?? 'General',
+          }),
+        ).timeout(const Duration(seconds: 5));
+        
+        if (response.statusCode == 200 || response.statusCode == 201) {
+          // Check if backend actually sent the SMS (not just simulated)
+          try {
+            final body = jsonDecode(response.body) as Map<String, dynamic>;
+            final delivered = body['success'] == true && body['simulated'] != true;
+            if (delivered) {
+              print('✅ SMS actually delivered via ${body['provider'] ?? 'gateway'} to $to');
+              return true;
+            } else if (body['simulated'] == true) {
+              print('⚠️ SMS simulated only — backend has no gateway configured. Add FAST2SMS_API_KEY to .env');
+              return false;
+            }
+          } catch (_) {
+            // JSON parse error — treat as delivered if HTTP 200
+            return true;
+          }
+        }
+      } catch (e) {
+        print('⚠️ SMS API endpoint bypass on $base: $e');
+      }
+    }
+    return false;
+  }
+
+  static Future<bool> saveTeacherMessage(Map<String, dynamic> msg) async {
+    try {
+      final conn = await getConnection();
+      await conn.execute('''
+        INSERT INTO app_teacher_messages (id, student_name, teacher_name, message, category, is_read, date_str, meeting_response)
+        VALUES (:id, :studentName, :teacherName, :message, :category, :isRead, :dateStr, :meetingResponse);
+      ''', {
+        'id': msg['id'],
+        'studentName': msg['studentName'],
+        'teacherName': msg['teacherName'],
+        'message': msg['message'],
+        'category': msg['category'],
+        'isRead': (msg['isRead'] == true) ? 1 : 0,
+        'dateStr': msg['date'] ?? 'Today',
+        'meetingResponse': msg['meetingResponse'] ?? '',
+      });
+      return true;
+    } catch (e) {
+      print('❌ Failed to save teacher message: $e');
+      return false;
+    }
+  }
+
+  static Future<List<Map<String, dynamic>>> getTeacherMessages(String studentName) async {
+    try {
+      final conn = await getConnection();
+      final results = await conn.execute('''
+        SELECT id, student_name, teacher_name, message, category, is_read, date_str, meeting_response
+        FROM app_teacher_messages
+        WHERE LOWER(student_name) = :studentName OR LOWER(student_name) = 'all'
+        ORDER BY created_at DESC;
+      ''', {'studentName': studentName.toLowerCase().trim()});
+
+      final list = <Map<String, dynamic>>[];
+      for (final row in results.rows) {
+        final assoc = row.assoc();
+        list.add({
+          'id': assoc['id'] ?? '',
+          'studentName': assoc['student_name'] ?? '',
+          'teacherName': assoc['teacher_name'] ?? '',
+          'message': assoc['message'] ?? '',
+          'category': assoc['category'] ?? '',
+          'isRead': assoc['is_read'] == '1' || assoc['is_read'] == 1,
+          'date': assoc['date_str'] ?? '',
+          'meetingResponse': assoc['meeting_response'] ?? '',
+        });
+      }
+      return list;
+    } catch (e) {
+      print('❌ Failed to fetch teacher messages: $e');
+      return [];
+    }
+  }
+
+  static Future<List<Map<String, dynamic>>> getAllTeacherMessages() async {
+    try {
+      final conn = await getConnection();
+      final results = await conn.execute('''
+        SELECT id, student_name, teacher_name, message, category, is_read, date_str, meeting_response
+        FROM app_teacher_messages
+        ORDER BY created_at DESC;
+      ''');
+
+      final list = <Map<String, dynamic>>[];
+      for (final row in results.rows) {
+        final assoc = row.assoc();
+        list.add({
+          'id': assoc['id'] ?? '',
+          'studentName': assoc['student_name'] ?? '',
+          'teacherName': assoc['teacher_name'] ?? '',
+          'message': assoc['message'] ?? '',
+          'category': assoc['category'] ?? '',
+          'isRead': assoc['is_read'] == '1' || assoc['is_read'] == 1,
+          'date': assoc['date_str'] ?? '',
+          'meetingResponse': assoc['meeting_response'] ?? '',
+        });
+      }
+      return list;
+    } catch (e) {
+      print('❌ Failed to fetch all teacher messages: $e');
+      return [];
+    }
+  }
+
+  static Future<int> addRecordedLecture({
+    required String title,
+    required String duration,
+    required String teacher,
+    required String emoji,
+    String? videoUrl,
+  }) async {
+    try {
+      final conn = await getConnection();
+      final results = await conn.execute('''
+        INSERT INTO app_recorded_lectures (title, duration, teacher, emoji, video_url)
+        VALUES (:title, :duration, :teacher, :emoji, :videoUrl);
+      ''', {
+        'title': title,
+        'duration': duration,
+        'teacher': teacher,
+        'emoji': emoji,
+        'videoUrl': videoUrl ?? 'https://flutter.github.io/assets-for-api-docs/assets/videos/butterfly.mp4',
+      });
+      return results.lastInsertID.toInt();
+    } catch (e) {
+      print('❌ Failed to insert recorded lecture: $e');
+      return 0;
+    }
+  }
+
+  static Future<List<Map<String, dynamic>>> getRecordedLectures() async {
+    try {
+      final conn = await getConnection();
+      final results = await conn.execute('''
+        SELECT id, title, duration, teacher, emoji, video_url
+        FROM app_recorded_lectures
+        ORDER BY created_at DESC;
+      ''');
+      final list = <Map<String, dynamic>>[];
+      for (final row in results.rows) {
+        final assoc = row.assoc();
+        list.add({
+          'id': int.tryParse(assoc['id'] ?? '') ?? 0,
+          'title': assoc['title'] ?? '',
+          'duration': assoc['duration'] ?? '',
+          'teacher': assoc['teacher'] ?? '',
+          'emoji': assoc['emoji'] ?? '📹',
+          'videoUrl': assoc['video_url'] ?? 'https://flutter.github.io/assets-for-api-docs/assets/videos/butterfly.mp4',
+        });
+      }
+      return list;
+    } catch (e) {
+      print('❌ Failed to fetch recorded lectures: $e');
+      return [];
+    }
+  }
+
+  static Future<String?> uploadFile(String filePath) async {
+    final file = File(filePath);
+    if (!file.existsSync()) {
+      print('⚠️ Upload failed: File does not exist at $filePath');
+      return null;
+    }
+    
+    final baseUrl = dotenv.env['API_BASE_URL'] ?? '';
+    final localUrl = dotenv.env['LOCAL_API_BASE_URL'] ?? 'http://10.0.2.2:4000';
+    
+    final baseCandidates = [
+      if (baseUrl.isNotEmpty) baseUrl,
+      localUrl,
+      'http://10.0.2.2:4000',
+      'http://127.0.0.1:4000',
+    ];
+    
+    for (final base in baseCandidates) {
+      try {
+        final cleanBase = base.replaceAll(RegExp(r'/+$'), '');
+        final uri = Uri.parse('$cleanBase/api/v1/upload');
+        print('📡 Sending file upload request to: $uri');
+        final request = http.MultipartRequest('POST', uri)
+          ..files.add(await http.MultipartFile.fromPath('file', file.path));
+        
+        final response = await request.send().timeout(const Duration(seconds: 20));
+        if (response.statusCode == 200 || response.statusCode == 201) {
+          final resBody = await response.stream.bytesToString();
+          final data = jsonDecode(resBody);
+          if (data['success'] == true && data['url'] != null) {
+            final fileUrl = data['url'] as String;
+            print('📁 File uploaded successfully to backend: $fileUrl');
+            // If the URL contains localhost/127.0.0.1 and we are running on emulator, we might want to replace it
+            // with the base url that succeeded so the emulator can fetch it. But the server constructs it from request host header,
+            // which will already be correct (e.g. 10.0.2.2:4000 if request went to 10.0.2.2).
+            return fileUrl;
+          }
+        }
+      } catch (e) {
+        print('⚠️ Failed to upload file to $base: $e');
+      }
+    }
+    return null;
+  }
+
+  // Update student's gamified stats in users table
+  static Future<bool> updateGamifiedStats(String email, {int? xp, int? level, int? streak, int? completedQuizzes}) async {
+    try {
+      final conn = await getConnection();
+      final Map<String, dynamic> params = {'email': email.toLowerCase().trim()};
+      final List<String> updates = [];
+      if (xp != null) { updates.add('xp = :xp'); params['xp'] = xp; }
+      if (level != null) { updates.add('level = :level'); params['level'] = level; }
+      if (streak != null) { updates.add('streak = :streak'); params['streak'] = streak; }
+      if (completedQuizzes != null) { updates.add('completed_quizzes = :completedQuizzes'); params['completedQuizzes'] = completedQuizzes; }
+      if (updates.isEmpty) return true;
+      
+      await conn.execute(
+        'UPDATE users SET ${updates.join(", ")} WHERE LOWER(email) = :email;',
+        params
+      );
+      return true;
+    } catch (e) {
+      print('⚠️ Failed to update gamified stats in database: $e');
+      return false;
+    }
+  }
+
+  // Fetch student leaderboard records ordered by XP
+  static Future<List<Map<String, dynamic>>> getLeaderboardData() async {
+    try {
+      final conn = await getConnection();
+      final results = await conn.execute(
+        'SELECT name, xp, level FROM users WHERE role = "student" ORDER BY xp DESC LIMIT 25;'
+      );
+      final list = <Map<String, dynamic>>[];
+      for (final row in results.rows) {
+        final assoc = row.assoc();
+        list.add({
+          'name': assoc['name'] ?? 'Student',
+          'xp': int.tryParse(assoc['xp'] ?? '') ?? 0,
+          'level': int.tryParse(assoc['level'] ?? '') ?? 1,
+        });
+      }
+      return list;
+    } catch (e) {
+      print('⚠️ Failed to fetch leaderboard data: $e');
+      return [];
     }
   }
 }

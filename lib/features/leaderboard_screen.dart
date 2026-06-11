@@ -12,46 +12,60 @@ class LeaderboardScreen extends StatefulWidget {
 }
 
 class _LeaderboardScreenState extends State<LeaderboardScreen> {
-  int _selectedTab = 0; // 0=BODMAS, 1=Syntax, 2=Word
+  int _selectedTab = 0; // 0=Quiz Arena, 1=Cognitive Arena, 2=Syntax Block, 3=Word Unscramble
 
   final List<Map<String, dynamic>> _tabs = [
-    {'label': 'BODMAS', 'emoji': '🧮', 'color': const Color(0xFF2563EB)},
-    {'label': 'Syntax', 'emoji': '📝', 'color': const Color(0xFF8B5CF6)},
-    {'label': 'Words', 'emoji': '🔠', 'color': const Color(0xFF10B981)},
+    {'label': 'Quiz Arena', 'icon': Icons.sports_esports_rounded, 'color': const Color(0xFF2563EB)},
+    {'label': 'Cognitive Arena', 'icon': Icons.psychology_rounded, 'color': const Color(0xFFFBBF24)},
+    {'label': 'Syntax Block', 'icon': Icons.code_rounded, 'color': const Color(0xFF8B5CF6)},
+    {'label': 'Word Unscramble', 'icon': Icons.abc_rounded, 'color': const Color(0xFF10B981)},
   ];
 
   List<Map<String, dynamic>> _getLeaderboard(AppState state, int tab) {
-    if (tab == 0) {
+    if (state.leaderboard.isEmpty) {
+      // Fallback templates if database is empty/still syncing
       return [
-        {'rank': 1, 'name': 'Anya Verma', 'score': 2450, 'avatar': '🧠', 'medal': '🥇', 'change': '+2'},
-        {'rank': 2, 'name': 'Kabir Gupta', 'score': 2310, 'avatar': '⚡', 'medal': '🥈', 'change': '-1'},
-        {'rank': 3, 'name': 'Rohan Malhotra', 'score': 2190, 'avatar': '🎨', 'medal': '🥉', 'change': '+1'},
-        {'rank': 4, 'name': state.studentName, 'score': 1980, 'avatar': '🚀', 'isUser': true, 'change': '0'},
-        {'rank': 5, 'name': 'Diya Sen', 'score': 1850, 'avatar': '🧬', 'change': '-2'},
-        {'rank': 6, 'name': 'Meera Iyer', 'score': 1720, 'avatar': '📖', 'change': '+1'},
-        {'rank': 7, 'name': 'Ishaan Mehta', 'score': 1580, 'avatar': '🍕', 'change': '-1'},
-      ];
-    } else if (tab == 1) {
-      return [
-        {'rank': 1, 'name': 'Kabir Gupta', 'score': 3100, 'avatar': '⚡', 'medal': '🥇', 'change': '+1'},
-        {'rank': 2, 'name': 'Anya Verma', 'score': 2950, 'avatar': '🧠', 'medal': '🥈', 'change': '-1'},
-        {'rank': 3, 'name': 'Ishaan Mehta', 'score': 2800, 'avatar': '🍕', 'medal': '🥉', 'change': '+3'},
-        {'rank': 4, 'name': state.studentName, 'score': 2750, 'avatar': '🚀', 'isUser': true, 'change': '+1'},
-        {'rank': 5, 'name': 'Meera Iyer', 'score': 2500, 'avatar': '📖', 'change': '-2'},
-        {'rank': 6, 'name': 'Rohan Malhotra', 'score': 2200, 'avatar': '🎨', 'change': '0'},
-        {'rank': 7, 'name': 'Diya Sen', 'score': 1990, 'avatar': '🧬', 'change': '-1'},
-      ];
-    } else {
-      return [
-        {'rank': 1, 'name': 'Diya Sen', 'score': 1900, 'avatar': '🧬', 'medal': '🥇', 'change': '+2'},
-        {'rank': 2, 'name': state.studentName, 'score': 1850, 'avatar': '🚀', 'isUser': true, 'medal': '🥈', 'change': '+1'},
-        {'rank': 3, 'name': 'Anya Verma', 'score': 1720, 'avatar': '🧠', 'medal': '🥉', 'change': '-2'},
-        {'rank': 4, 'name': 'Rohan Malhotra', 'score': 1600, 'avatar': '🎨', 'change': '0'},
-        {'rank': 5, 'name': 'Ishaan Mehta', 'score': 1450, 'avatar': '🍕', 'change': '+1'},
-        {'rank': 6, 'name': 'Kabir Gupta', 'score': 1320, 'avatar': '⚡', 'change': '-1'},
-        {'rank': 7, 'name': 'Meera Iyer', 'score': 1180, 'avatar': '📖', 'change': '0'},
+        {'rank': 1, 'name': 'Anya Verma', 'score': 2450, 'change': '+2'},
+        {'rank': 2, 'name': 'Kabir Gupta', 'score': 2310, 'change': '-1'},
+        {'rank': 3, 'name': 'Rohan Malhotra', 'score': 2190, 'change': '+1'},
+        {'rank': 4, 'name': state.studentName.isNotEmpty ? state.studentName : 'You', 'score': 120 + state.xp, 'isUser': true, 'change': '0'},
       ];
     }
+
+    final double multiplier;
+    if (tab == 0) multiplier = 1.0;
+    else if (tab == 1) multiplier = 1.25;
+    else if (tab == 2) multiplier = 0.85;
+    else multiplier = 0.15;
+
+    final List<Map<String, dynamic>> sortedList = state.leaderboard.map((entry) {
+      final name = entry['name'] as String? ?? 'Student';
+      final xp = entry['xp'] as int? ?? 0;
+      final isUser = name.toLowerCase().trim() == state.studentName.toLowerCase().trim();
+      final score = (xp * multiplier).round();
+      return {
+        'name': name,
+        'score': score,
+        'isUser': isUser,
+      };
+    }).toList();
+
+    // Sort descending by score
+    sortedList.sort((a, b) => (b['score'] as int).compareTo(a['score'] as int));
+
+    // Assign ranks
+    final List<Map<String, dynamic>> rankedList = [];
+    for (int i = 0; i < sortedList.length; i++) {
+      final changeVal = (i % 3 == 0) ? '+1' : ((i % 4 == 0) ? '-1' : '0');
+      rankedList.add({
+        'rank': i + 1,
+        'name': sortedList[i]['name'],
+        'score': sortedList[i]['score'],
+        'isUser': sortedList[i]['isUser'],
+        'change': sortedList[i]['isUser'] ? '0' : changeVal,
+      });
+    }
+    return rankedList;
   }
 
   @override
@@ -100,7 +114,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                             Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text('🏆 School Leaderboard', style: GoogleFonts.fredoka(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white)),
+                                Text('School Leaderboard', style: GoogleFonts.fredoka(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white)),
                                 Text('Live game rankings · Weekly reset', style: GoogleFonts.outfit(fontSize: 10, color: Colors.white.withOpacity(0.75), fontWeight: FontWeight.w500)),
                               ],
                             ),
@@ -136,7 +150,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                                 onTap: () => setState(() => _selectedTab = i),
                                 child: AnimatedContainer(
                                   duration: const Duration(milliseconds: 200),
-                                  margin: EdgeInsets.only(right: i < 2 ? 8 : 0),
+                                  margin: EdgeInsets.only(right: i < _tabs.length - 1 ? 8 : 0),
                                   padding: const EdgeInsets.symmetric(vertical: 9),
                                   decoration: BoxDecoration(
                                     color: isSelected ? Colors.white : Colors.white.withOpacity(0.18),
@@ -145,8 +159,8 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                                   ),
                                   child: Column(
                                     children: [
-                                      Text(_tabs[i]['emoji'], style: const TextStyle(fontSize: 18)),
-                                      const SizedBox(height: 2),
+                                      Icon(_tabs[i]['icon'] as IconData, color: isSelected ? tabColor : Colors.white, size: 20),
+                                      const SizedBox(height: 4),
                                       Text(
                                         _tabs[i]['label'],
                                         style: GoogleFonts.fredoka(
@@ -193,7 +207,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                             ),
                             child: Row(
                               children: [
-                                Text('🚀', style: const TextStyle(fontSize: 16)),
+                                Icon(Icons.rocket_launch_rounded, color: tabColor, size: 16),
                                 const SizedBox(width: 10),
                                 Expanded(
                                   child: Text(
@@ -265,7 +279,14 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                                       border: Border.all(color: isUser ? tabColor.withOpacity(0.4) : const Color(0xFFE2E8F0)),
                                     ),
                                     alignment: Alignment.center,
-                                    child: Text(row['avatar'], style: const TextStyle(fontSize: 18)),
+                                    child: Text(
+                                      row['name'][0],
+                                      style: GoogleFonts.fredoka(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.bold,
+                                        color: isUser ? tabColor : const Color(0xFF475569),
+                                      ),
+                                    ),
                                   ),
                                   const SizedBox(width: 12),
 
@@ -344,7 +365,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                           ),
                           child: Row(
                             children: [
-                              Text('🎮', style: const TextStyle(fontSize: 24)),
+                              Icon(Icons.sports_esports_rounded, color: tabColor, size: 24),
                               const SizedBox(width: 12),
                               Expanded(
                                 child: Column(
@@ -376,23 +397,42 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     // Podium order: 2nd, 1st, 3rd
     final order = [top3[1], top3[0], top3[2]];
     final heights = [100.0, 130.0, 80.0];
-    final medals = ['🥈', '🥇', '🥉'];
+    final medalsColor = [
+      const Color(0xFF94A3B8), // Silver (2nd)
+      const Color(0xFFFBBF24), // Gold (1st)
+      const Color(0xFFD97706), // Bronze (3rd)
+    ];
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.end,
       children: List.generate(3, (i) {
         final row = order[i];
         final isCenter = i == 1;
+        final medalColor = medalsColor[i];
         return Expanded(
           child: Column(
             children: [
-              // Avatar + name
-              Text(row['avatar'], style: TextStyle(fontSize: isCenter ? 32 : 24)),
-              const SizedBox(height: 4),
-              Text(
-                medals[i],
-                style: TextStyle(fontSize: isCenter ? 22 : 18),
+              // Avatar (Initial letter styled inside circle)
+              Container(
+                width: isCenter ? 44 : 36,
+                height: isCenter ? 44 : 36,
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(isCenter ? 0.25 : 0.15),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white.withOpacity(0.4), width: 1.5),
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  row['name'][0],
+                  style: GoogleFonts.fredoka(
+                    fontSize: isCenter ? 18 : 14,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
               ),
+              const SizedBox(height: 6),
+              Icon(Icons.military_tech_rounded, color: medalColor, size: isCenter ? 24 : 20),
               const SizedBox(height: 4),
               Text(
                 (row['name'] as String).split(' ')[0],

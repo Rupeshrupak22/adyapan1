@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'dart:io';
 import '../core/theme.dart';
 import '../core/app_state.dart';
@@ -199,7 +201,33 @@ class _DoubtSolverScreenState extends State<DoubtSolverScreen> {
             previewWidget = _buildSimulatedNotebook(name);
           }
         } else {
-          previewWidget = _buildSimulatedPdf(name);
+          if (path.startsWith('http') || path.startsWith('https')) {
+            previewWidget = Container(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.picture_as_pdf_rounded, size: 64, color: Colors.redAccent),
+                  const SizedBox(height: 12),
+                  Text(name, style: GoogleFonts.fredoka(fontWeight: FontWeight.bold, fontSize: 14), textAlign: TextAlign.center),
+                  const SizedBox(height: 16),
+                  ElevatedButton.icon(
+                    onPressed: () async {
+                      final uri = Uri.tryParse(path);
+                      if (uri != null && await canLaunchUrl(uri)) {
+                        await launchUrl(uri, mode: LaunchMode.externalApplication);
+                      }
+                    },
+                    icon: const Icon(Icons.open_in_new_rounded, color: Colors.white, size: 16),
+                    label: Text('Open PDF Document', style: GoogleFonts.fredoka(color: Colors.white, fontWeight: FontWeight.bold)),
+                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2563EB)),
+                  ),
+                ],
+              ),
+            );
+          } else {
+            previewWidget = _buildSimulatedPdf(name);
+          }
         }
 
         return Dialog(

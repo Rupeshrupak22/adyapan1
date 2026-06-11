@@ -44,7 +44,40 @@ const PORT = process.env.PORT || 4000;
 const isProduction = process.env.NODE_ENV === 'production';
 
 // ─── Security Middleware ─────────────────────────────────────────────
-app.use(helmet());
+app.use(
+  helmet({
+    crossOriginResourcePolicy: false, // Allows media files (images/videos) to load on mobile app
+  })
+);
+
+const multer = require('multer');
+const fs = require('fs');
+const path = require('path');
+
+// Ensure uploads folder exists
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
+// Multer storage engine
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, uploadsDir);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    cb(null, uniqueSuffix + path.extname(file.originalname));
+  },
+});
+
+const upload = multer({
+  storage: storage,
+  limits: { fileSize: 100 * 1024 * 1024 }, // 100 MB limit
+});
+
+// Serve uploads folder static directory
+app.use('/uploads', express.static(uploadsDir));
 
 // ─── CORS Configuration ─────────────────────────────────────────────
 const allowedOrigins = (process.env.CORS_ORIGINS || '')
@@ -162,6 +195,121 @@ app.use('/api/v1/payments', paymentRoutes);
 app.use('/api/v1/notices', noticeRoutes);
 app.use('/api/v1/dashboard', dashboardRoutes);
 app.use('/api/v1/bulk-import', bulkImportRoutes);
+
+// ─── File Upload Endpoint ───────────────────────────────────────────
+app.post('/api/v1/upload', upload.single('file'), (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ success: false, message: 'No file uploaded' });
+  }
+  const fileUrl = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
+  console.log(`📁 File Uploaded: ${req.file.filename} -> ${fileUrl}`);
+  res.json({
+    success: true,
+    message: 'File uploaded successfully',
+    filename: req.file.filename,
+    originalName: req.file.originalname,
+    size: req.file.size,
+    url: fileUrl,
+  });
+});
+
+// ─── Direct SMS Dispatch Route (Fast2SMS / Twilio Gateway) ──────────
+app.post('/api/v1/sms/send', async (req, res) => {
+  const { to, message, category, studentName } = req.body;
+
+  if (!to || !message) {
+    return res.status(400).json({ success: false, message: 'Missing required fields: to, message' });
+  }
+
+  console.log(`\n=================== 📲 SMS DISPATCH SYSTEM ===================`);
+  console.log(`📞 TO (Parent): ${to}`);
+  console.log(`👤 STUDENT: ${studentName}`);
+  console.log(`🏷️  CATEGORY: ${category ? category.toUpperCase() : 'GENERAL'}`);
+  console.log(`💬 MESSAGE: "${message}"`);
+
+  // ── Fast2SMS Integration (Indian SMS gateway, free tier available) ──
+  const fast2smsKey = process.env.FAST2SMS_API_KEY;
+  if (fast2smsKey) {
+    try {
+      const axios = require('axios');
+      // Sanitize phone number — remove spaces, dashes, +91 prefix
+      const cleanPhone = to.replace(/[\s\-+]/g, '').replace(/^91/, '').slice(-10);
+
+      const smsResponse = await axios.post(
+        'https://www.fast2sms.com/dev/bulkV2',
+        {
+          route: 'q',
+          message: message,
+          language: 'english',
+          flash: 0,
+          numbers: cleanPhone,
+        },
+        {
+          headers: {
+            authorization: fast2smsKey,
+            'Content-Type': 'application/json',
+          },
+          timeout: 8000,
+        }
+      );
+
+      if (smsResponse.data?.return === true) {
+        console.log(`✅ SMS delivered via Fast2SMS to ${cleanPhone}`);
+        console.log(`==============================================================\n`);
+        return res.json({
+          success: true,
+          provider: 'fast2sms',
+          message: `SMS delivered to ${to}`,
+          to,
+          studentName,
+        });
+      } else {
+        console.warn(`⚠️ Fast2SMS returned error:`, smsResponse.data);
+      }
+    } catch (smsErr) {
+      console.error(`❌ Fast2SMS call failed:`, smsErr?.response?.data || smsErr.message);
+    }
+  }
+
+  // ── Twilio Integration (fallback if TWILIO_ACCOUNT_SID configured) ──
+  const twilioSid = process.env.TWILIO_ACCOUNT_SID;
+  const twilioToken = process.env.TWILIO_AUTH_TOKEN;
+  const twilioFrom = process.env.TWILIO_FROM_NUMBER;
+  if (twilioSid && twilioToken && twilioFrom) {
+    try {
+      const twilio = require('twilio')(twilioSid, twilioToken);
+      const toNumber = to.startsWith('+') ? to : `+91${to.replace(/\D/g, '').slice(-10)}`;
+      await twilio.messages.create({ body: message, from: twilioFrom, to: toNumber });
+      console.log(`✅ SMS delivered via Twilio to ${to}`);
+      console.log(`==============================================================\n`);
+      return res.json({
+        success: true,
+        provider: 'twilio',
+        message: `SMS delivered to ${to}`,
+        to,
+        studentName,
+      });
+    } catch (twilioErr) {
+      console.error(`❌ Twilio call failed:`, twilioErr.message);
+    }
+  }
+
+  // ── Simulated Fallback (no gateway configured) ──────────────────────
+  console.log(`⚠️  No SMS gateway configured. SMS simulated (not actually sent).`);
+  console.log(`   → To enable real SMS, add FAST2SMS_API_KEY to your .env file`);
+  console.log(`   → Get free key at: https://www.fast2sms.com`);
+  console.log(`==============================================================\n`);
+
+  // Return 200 so app doesn't crash, but mark as simulated
+  res.json({
+    success: false,
+    simulated: true,
+    message: 'SMS gateway not configured — message logged only. Add FAST2SMS_API_KEY to .env to enable real SMS.',
+    to,
+    studentName,
+  });
+});
+
 
 // ─── 404 Handler ────────────────────────────────────────────────────
 app.use((req, res) => {

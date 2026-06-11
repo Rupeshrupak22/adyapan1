@@ -11,291 +11,50 @@ class RoadmapScreen extends StatefulWidget {
   State<RoadmapScreen> createState() => _RoadmapScreenState();
 }
 
-class _RoadmapScreenState extends State<RoadmapScreen> with SingleTickerProviderStateMixin {
+class _RoadmapScreenState extends State<RoadmapScreen> {
   int _selectedSubjectIndex = 0;
-  late TabController _tabController;
-
-  final List<Map<String, dynamic>> _subjects = [
-    {
-      'name': 'Mathematics',
-      'emoji': '📐',
-      'color': const Color(0xFF2563EB),
-      'bgColor': const Color(0xFFEFF6FF),
-      'gradient': [const Color(0xFF2563EB), const Color(0xFF1E40AF)],
-      'key': 'Math',
-    },
-    {
-      'name': 'Science',
-      'emoji': '⚛️',
-      'color': const Color(0xFF10B981),
-      'bgColor': const Color(0xFFECFDF5),
-      'gradient': [const Color(0xFF10B981), const Color(0xFF059669)],
-      'key': 'Science',
-    },
-    {
-      'name': 'English',
-      'emoji': '📖',
-      'color': const Color(0xFF8B5CF6),
-      'bgColor': const Color(0xFFF5F3FF),
-      'gradient': [const Color(0xFF8B5CF6), const Color(0xFF6D28D9)],
-      'key': 'English',
-    },
-  ];
-
-  // English roadmap nodes (not in AppState, we define here)
-  final List<Map<String, dynamic>> _englishNodes = [
-    {'id': 'e1', 'title': 'Grammar Basics', 'subtitle': 'Nouns & Verbs', 'status': 'completed', 'desc': 'Master fundamental grammar rules and parts of speech.', 'xp': 50},
-    {'id': 'e2', 'title': 'Active & Passive', 'subtitle': 'Voice Transformations', 'status': 'unlocked', 'desc': 'Convert sentences between active and passive voice.', 'xp': 75},
-    {'id': 'e3', 'title': 'Essay Writing', 'subtitle': 'Structure & Flow', 'status': 'locked', 'desc': 'Write compelling essays with introduction, body, and conclusion.', 'xp': 100},
-    {'id': 'e4', 'title': 'Comprehension', 'subtitle': 'Reading & Analysis', 'status': 'locked', 'desc': 'Analyze and interpret complex reading passages.', 'xp': 125},
-  ];
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
-    _tabController.addListener(() {
-      if (_tabController.indexIsChanging) {
-        setState(() {
-          _selectedSubjectIndex = _tabController.index;
-        });
-      }
-    });
   }
 
   @override
   void dispose() {
-    _tabController.dispose();
     super.dispose();
   }
 
-  List<Map<String, dynamic>> _getNodes(AppState state) {
-    if (_selectedSubjectIndex == 0) return state.roadmaps['Math'] ?? [];
-    if (_selectedSubjectIndex == 1) return state.roadmaps['Science'] ?? [];
-    return _englishNodes;
-  }
-
-  void _showNodeDetailsDialog(BuildContext context, Map<String, dynamic> node, AppState state) {
-    final subject = _subjects[_selectedSubjectIndex];
-    final Color accentColor = subject['color'];
-    bool isLocked = node['status'] == 'locked';
-    bool isCompleted = node['status'] == 'completed';
-
-    showDialog(
-      context: context,
-      builder: (context) => Dialog(
-        backgroundColor: Colors.transparent,
-        insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 30),
-        child: Container(
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(28),
-            boxShadow: [
-              BoxShadow(
-                color: accentColor.withOpacity(0.15),
-                blurRadius: 30,
-                offset: const Offset(0, 10),
-              ),
-            ],
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Status badge + close
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: isCompleted
-                          ? const Color(0xFF10B981).withOpacity(0.1)
-                          : isLocked
-                              ? const Color(0xFFF1F5F9)
-                              : accentColor.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(30),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          isCompleted ? Icons.check_circle_rounded : isLocked ? Icons.lock_rounded : Icons.play_circle_rounded,
-                          size: 12,
-                          color: isCompleted ? const Color(0xFF10B981) : isLocked ? AdyapanTheme.textMuted : accentColor,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          isCompleted ? 'COMPLETED' : isLocked ? 'LOCKED' : 'IN PROGRESS',
-                          style: GoogleFonts.outfit(
-                            fontSize: 9,
-                            fontWeight: FontWeight.bold,
-                            color: isCompleted ? const Color(0xFF10B981) : isLocked ? AdyapanTheme.textMuted : accentColor,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  GestureDetector(
-                    onTap: () => Navigator.pop(context),
-                    child: Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: const BoxDecoration(color: Color(0xFFF1F5F9), shape: BoxShape.circle),
-                      child: const Icon(Icons.close, size: 16, color: Color(0xFF64748B)),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-
-              // Subject emoji + title
-              Row(
-                children: [
-                  Container(
-                    width: 52,
-                    height: 52,
-                    decoration: BoxDecoration(
-                      color: subject['bgColor'],
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: accentColor.withOpacity(0.2)),
-                    ),
-                    alignment: Alignment.center,
-                    child: Text(subject['emoji'], style: const TextStyle(fontSize: 26)),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(node['title'], style: GoogleFonts.fredoka(fontSize: 18, fontWeight: FontWeight.bold, color: AdyapanTheme.textMain)),
-                        Text(node['subtitle'], style: GoogleFonts.outfit(fontSize: 11, color: AdyapanTheme.textSub, fontWeight: FontWeight.w600)),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 14),
-
-              // XP Reward chip
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFFFBEB),
-                  borderRadius: BorderRadius.circular(30),
-                  border: Border.all(color: const Color(0xFFF59E0B).withOpacity(0.3)),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Text('⭐', style: TextStyle(fontSize: 12)),
-                    const SizedBox(width: 4),
-                    Text(
-                      '+${node['xp'] ?? 50} XP on completion',
-                      style: GoogleFonts.fredoka(fontSize: 11, fontWeight: FontWeight.bold, color: const Color(0xFFD97706)),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 14),
-
-              // Description
-              Text(node['desc'], style: GoogleFonts.outfit(fontSize: 13, color: AdyapanTheme.textMain, height: 1.5)),
-              const SizedBox(height: 16),
-
-              // Skills
-              Text('SKILLS YOU\'LL GAIN', style: GoogleFonts.outfit(fontSize: 9, color: AdyapanTheme.textMuted, fontWeight: FontWeight.bold, letterSpacing: 1)),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 6,
-                runSpacing: 6,
-                children: ['Problem Solving', 'Logical Thinking', 'Exam Ready'].map((skill) {
-                  return Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: accentColor.withOpacity(0.07),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: accentColor.withOpacity(0.2)),
-                    ),
-                    child: Text(skill, style: GoogleFonts.outfit(fontSize: 10, color: accentColor, fontWeight: FontWeight.bold)),
-                  );
-                }).toList(),
-              ),
-              const SizedBox(height: 24),
-
-              // Action buttons
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.pop(context),
-                      style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: Color(0xFFE2E8F0)),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-                        minimumSize: const Size(0, 44),
-                      ),
-                      child: Text('Close', style: GoogleFonts.fredoka(color: AdyapanTheme.textSub)),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: isLocked
-                          ? null
-                          : () {
-                              Navigator.pop(context);
-                              if (!isCompleted) {
-                                final stateKey = _subjects[_selectedSubjectIndex]['key'];
-                                if (stateKey != 'English') {
-                                  state.completeRoadmapNode(stateKey, node['id']);
-                                }
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text('🎉 ${node['title']} unlocked! Topic marked complete.'),
-                                    backgroundColor: const Color(0xFF10B981),
-                                  ),
-                                );
-                              } else {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('✅ Already completed! Play Arcade games to earn bonus XP.'),
-                                    backgroundColor: Color(0xFF10B981),
-                                  ),
-                                );
-                              }
-                            },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: isCompleted ? const Color(0xFF10B981) : isLocked ? const Color(0xFFE2E8F0) : accentColor,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-                        minimumSize: const Size(0, 44),
-                        disabledBackgroundColor: const Color(0xFFE2E8F0),
-                      ),
-                      child: Text(
-                        isCompleted ? 'Revise Topic' : isLocked ? '🔒 Locked' : 'Start Now',
-                        style: GoogleFonts.fredoka(
-                          color: isLocked ? AdyapanTheme.textMuted : Colors.white,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+  List<Map<String, dynamic>> _getNodes(AppState state, List<Map<String, dynamic>> subjects) {
+    if (subjects.isEmpty) return [];
+    if (_selectedSubjectIndex >= subjects.length) {
+      _selectedSubjectIndex = 0;
+    }
+    final key = subjects[_selectedSubjectIndex]['key'];
+    return state.roadmaps[key] ?? [];
   }
 
   @override
   Widget build(BuildContext context) {
     return Consumer<AppState>(
       builder: (context, state, child) {
-        final nodes = _getNodes(state);
-        final subject = _subjects[_selectedSubjectIndex];
-        final Color accentColor = subject['color'];
-        final List<Color> gradient = subject['gradient'];
+        final subjects = state.getSubjectsForClass(state.studentClass);
+        if (_selectedSubjectIndex >= subjects.length) {
+          _selectedSubjectIndex = 0;
+        }
+        final nodes = _getNodes(state, subjects);
+        final subject = subjects.isEmpty
+            ? {
+                'name': 'No Subject',
+                'emoji': '📚',
+                'color': const Color(0xFF64748B),
+                'bgColor': const Color(0xFFF1F5F9),
+                'gradient': [const Color(0xFF64748B), const Color(0xFF475569)],
+                'key': 'None',
+              }
+            : subjects[_selectedSubjectIndex];
+            
+        final Color accentColor = subject['color'] as Color;
+        final List<Color> gradient = subject['gradient'] as List<Color>;
 
         // Calculate subject-specific progress
         int completedCount = nodes.where((n) => n['status'] == 'completed').length;
@@ -372,9 +131,10 @@ class _RoadmapScreenState extends State<RoadmapScreen> with SingleTickerProvider
                           child: ListView.builder(
                             scrollDirection: Axis.horizontal,
                             padding: const EdgeInsets.symmetric(horizontal: 8),
-                            itemCount: _subjects.length,
+                            itemCount: subjects.length,
                             itemBuilder: (context, i) {
                               bool isSelected = _selectedSubjectIndex == i;
+                              final accentColor = subjects[i]['color'] as Color;
                               return GestureDetector(
                                 onTap: () => setState(() => _selectedSubjectIndex = i),
                                 child: AnimatedContainer(
@@ -391,10 +151,14 @@ class _RoadmapScreenState extends State<RoadmapScreen> with SingleTickerProvider
                                   child: Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      Text(_subjects[i]['emoji'], style: const TextStyle(fontSize: 14)),
+                                      Icon(
+                                        _getSubjectIcon(subjects[i]['name'] as String? ?? ''),
+                                        size: 14,
+                                        color: isSelected ? accentColor : Colors.white,
+                                      ),
                                       const SizedBox(width: 6),
                                       Text(
-                                        _subjects[i]['name'],
+                                        state.translate(subjects[i]['name'] as String),
                                         style: GoogleFonts.fredoka(
                                           fontSize: 12,
                                           fontWeight: FontWeight.bold,
@@ -465,10 +229,24 @@ class _RoadmapScreenState extends State<RoadmapScreen> with SingleTickerProvider
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(
-                                      '${subject['emoji']} ${subject['name']}',
-                                      style: GoogleFonts.fredoka(fontSize: 15, fontWeight: FontWeight.bold, color: AdyapanTheme.textMain),
-                                    ),
+                                      Row(
+                                        children: [
+                                          Icon(
+                                            _getSubjectIcon(subject['name'] as String? ?? ''),
+                                            size: 16,
+                                            color: accentColor,
+                                          ),
+                                          const SizedBox(width: 6),
+                                          Expanded(
+                                            child: Text(
+                                              state.translate(subject['name'] as String? ?? ''),
+                                              style: GoogleFonts.fredoka(fontSize: 15, fontWeight: FontWeight.bold, color: AdyapanTheme.textMain),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
                                     Text(
                                       '$completedCount of ${nodes.length} topics completed',
                                       style: GoogleFonts.outfit(fontSize: 11, color: AdyapanTheme.textSub, fontWeight: FontWeight.w500),
@@ -535,7 +313,17 @@ class _RoadmapScreenState extends State<RoadmapScreen> with SingleTickerProvider
                                 mainAxisAlignment: isRight ? MainAxisAlignment.end : MainAxisAlignment.start,
                                 children: [
                                   GestureDetector(
-                                    onTap: () => _showNodeDetailsDialog(context, node, state),
+                                    onTap: () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => RoadmapNodeDetailsPage(
+                                            node: node,
+                                            subject: subject,
+                                          ),
+                                        ),
+                                      );
+                                    },
                                     child: Container(
                                       width: 260,
                                       padding: const EdgeInsets.all(16),
@@ -642,7 +430,7 @@ class _RoadmapScreenState extends State<RoadmapScreen> with SingleTickerProvider
                                                 color: const Color(0xFF10B981).withOpacity(0.15),
                                                 borderRadius: BorderRadius.circular(8),
                                               ),
-                                              child: Text('✅', style: const TextStyle(fontSize: 10)),
+                                              child: const Icon(Icons.check_circle_rounded, color: Color(0xFF10B981), size: 12),
                                             )
                                           else if (isUnlocked)
                                             Container(
@@ -720,7 +508,7 @@ class _RoadmapScreenState extends State<RoadmapScreen> with SingleTickerProvider
                                   borderRadius: BorderRadius.circular(14),
                                 ),
                                 alignment: Alignment.center,
-                                child: Text('🔭', style: const TextStyle(fontSize: 22)),
+                                child: Icon(Icons.explore_rounded, color: accentColor, size: 22),
                               ),
                               const SizedBox(width: 12),
                               Expanded(
@@ -764,7 +552,7 @@ class _RoadmapScreenState extends State<RoadmapScreen> with SingleTickerProvider
                             children: [
                               Row(
                                 children: [
-                                  const Text('🎯', style: TextStyle(fontSize: 16)),
+                                  Icon(Icons.track_changes_rounded, color: accentColor, size: 16),
                                   const SizedBox(width: 8),
                                   Text('This Week\'s Target', style: GoogleFonts.fredoka(fontSize: 14, fontWeight: FontWeight.bold, color: AdyapanTheme.textMain)),
                                   const Spacer(),
@@ -780,7 +568,7 @@ class _RoadmapScreenState extends State<RoadmapScreen> with SingleTickerProvider
                                 ],
                               ),
                               const SizedBox(height: 12),
-                              _buildWeeklyTarget('Complete 1 ${subject['name']} topic', true, accentColor),
+                              _buildWeeklyTarget('Complete 1 ${state.translate(subject['name'] as String)} topic', true, accentColor),
                               const SizedBox(height: 6),
                               _buildWeeklyTarget('Play 2 Arcade games', false, accentColor),
                               const SizedBox(height: 6),
@@ -830,16 +618,529 @@ class _RoadmapScreenState extends State<RoadmapScreen> with SingleTickerProvider
           ),
         ),
         const SizedBox(width: 8),
-        Text(
-          title,
-          style: GoogleFonts.outfit(
-            fontSize: 11,
-            fontWeight: FontWeight.w600,
-            color: done ? AdyapanTheme.textMuted : AdyapanTheme.textMain,
-            decoration: done ? TextDecoration.lineThrough : null,
+        Expanded(
+          child: Text(
+            title,
+            style: GoogleFonts.outfit(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: done ? AdyapanTheme.textMuted : AdyapanTheme.textMain,
+              decoration: done ? TextDecoration.lineThrough : null,
+            ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
           ),
         ),
       ],
     );
   }
+}
+
+// =========================================================================
+//  DEDICATED VISUAL FULL-SCREEN PAGE: ROADMAP NODE DETAILS PAGE
+// =========================================================================
+class RoadmapNodeDetailsPage extends StatelessWidget {
+  final Map<String, dynamic> node;
+  final Map<String, dynamic> subject;
+
+  const RoadmapNodeDetailsPage({
+    Key? key,
+    required this.node,
+    required this.subject,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    final state = Provider.of<AppState>(context);
+    final Color accentColor = subject['color'] as Color;
+    final List<Color> gradient = subject['gradient'] as List<Color>;
+
+    // Dynamically retrieve node state from appState so editing matches
+    final subjectKey = subject['key'] as String;
+    final activeNodes = state.roadmaps[subjectKey] ?? [];
+    final activeNode = activeNodes.firstWhere((n) => n['id'] == node['id'], orElse: () => node);
+
+    bool isLocked = activeNode['status'] == 'locked';
+    bool isCompleted = activeNode['status'] == 'completed';
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFC),
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_rounded, color: Color(0xFF0F172A), size: 20),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: Text(
+          'Milestone Details',
+          style: GoogleFonts.fredoka(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: const Color(0xFF0F172A),
+          ),
+        ),
+        centerTitle: true,
+      ),
+      body: Container(
+        height: double.infinity,
+        width: double.infinity,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              Color(0xFFEEF2F6), // Soft lavender grey
+              Color(0xFFE0E7FF), // Soft indigo
+              Color(0xFFFFF0F5), // Soft pastel pink
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+        ),
+        child: SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // 3D Beveled details container card
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.9),
+                  borderRadius: BorderRadius.circular(28),
+                  border: Border.all(color: Colors.white, width: 2),
+                  boxShadow: [
+                    BoxShadow(
+                      color: accentColor.withOpacity(0.12),
+                      offset: const Offset(0, 10),
+                      blurRadius: 30,
+                      spreadRadius: 2,
+                    ),
+                    BoxShadow(
+                      color: Colors.white.withOpacity(0.8),
+                      offset: const Offset(-4, -4),
+                      blurRadius: 10,
+                      spreadRadius: 0,
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Status Badge row
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: isCompleted
+                                ? const Color(0xFFECFDF5)
+                                : isLocked
+                                    ? const Color(0xFFF1F5F9)
+                                    : accentColor.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(30),
+                            border: Border.all(
+                              color: isCompleted
+                                  ? const Color(0xFF10B981).withOpacity(0.3)
+                                  : isLocked
+                                      ? const Color(0xFFE2E8F0)
+                                      : accentColor.withOpacity(0.2),
+                              width: 1.2,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                isCompleted
+                                    ? Icons.check_circle_rounded
+                                    : isLocked
+                                        ? Icons.lock_rounded
+                                        : Icons.play_circle_rounded,
+                                size: 14,
+                                color: isCompleted
+                                    ? const Color(0xFF10B981)
+                                    : isLocked
+                                        ? AdyapanTheme.textMuted
+                                        : accentColor,
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                isCompleted
+                                    ? 'COMPLETED'
+                                    : isLocked
+                                        ? 'LOCKED'
+                                        : 'IN PROGRESS',
+                                style: GoogleFonts.outfit(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  color: isCompleted
+                                      ? const Color(0xFF10B981)
+                                      : isLocked
+                                          ? AdyapanTheme.textMuted
+                                          : accentColor,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        // Small subject banner
+                        Flexible(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: const Color(0xFFE2E8F0)),
+                            ),
+                            child: Text(
+                              state.translate(subject['name'] as String? ?? ''),
+                              style: GoogleFonts.outfit(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                color: const Color(0xFF475569),
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
+
+                    // Title section with big emoji
+                    Row(
+                      children: [
+                        Container(
+                          width: 58,
+                          height: 58,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: gradient,
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            borderRadius: BorderRadius.circular(18),
+                            boxShadow: [
+                              BoxShadow(
+                                color: accentColor.withOpacity(0.3),
+                                blurRadius: 10,
+                                offset: const Offset(0, 4),
+                              )
+                            ],
+                          ),
+                          alignment: Alignment.center,
+                          child: Icon(
+                            _getSubjectIcon(subject['name'] as String? ?? ''),
+                            color: Colors.white,
+                            size: 28,
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                activeNode['title'] ?? 'Milestone Title',
+                                style: GoogleFonts.fredoka(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                  color: AdyapanTheme.textMain,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                activeNode['subtitle'] ?? 'Sub-milestone description',
+                                style: GoogleFonts.outfit(
+                                  fontSize: 12,
+                                  color: AdyapanTheme.textSub,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                    const Divider(color: Color(0xFFE2E8F0), height: 1),
+                    const SizedBox(height: 20),
+
+                    // XP Reward Banner
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFFBEB),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: const Color(0xFFF59E0B).withOpacity(0.25),
+                          width: 1.2,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          const Text('⭐', style: TextStyle(fontSize: 18)),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '+${activeNode['xp'] ?? 75} XP Milestone Reward',
+                                  style: GoogleFonts.fredoka(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.bold,
+                                    color: const Color(0xFFD97706),
+                                  ),
+                                ),
+                                Text(
+                                  'Acquire knowledge and advance levels instantly!',
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 10,
+                                    color: const Color(0xFFB45309),
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 22),
+
+                    // Description text
+                    Text(
+                      'MILESTONE OVERVIEW',
+                      style: GoogleFonts.outfit(
+                        fontSize: 10,
+                        color: AdyapanTheme.textMuted,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      activeNode['desc'] ??
+                          'Explore interactive nodes, learn new concepts, and play retro games to secure your curriculum targets smoothly.',
+                      style: GoogleFonts.outfit(
+                        fontSize: 13,
+                        color: const Color(0xFF334155),
+                        height: 1.6,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    if (activeNode['pdfPath'] != null && activeNode['pdfPath'].toString().isNotEmpty) ...[
+                      const SizedBox(height: 20),
+                      Text(
+                        'ATTACHED SYLLABUS / STUDY MATERIAL',
+                        style: GoogleFonts.outfit(
+                          fontSize: 10,
+                          color: AdyapanTheme.textMuted,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1.2,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: Colors.red[50]!.withOpacity(0.6),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: Colors.red[200]!.withOpacity(0.5)),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.picture_as_pdf_rounded, color: Colors.red[700], size: 28),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    activeNode['pdfName'] ?? 'Syllabus Document.pdf',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: GoogleFonts.outfit(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.red[900],
+                                    ),
+                                  ),
+                                  Text(
+                                    'Click below to open study file',
+                                    style: GoogleFonts.outfit(
+                                      fontSize: 10,
+                                      color: Colors.red[700],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: () {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('📂 Opening PDF: ${activeNode['pdfName']}'),
+                                backgroundColor: Colors.red[700],
+                                behavior: SnackBarBehavior.floating,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              ),
+                            );
+                          },
+                          icon: const Icon(Icons.open_in_new_rounded, size: 14),
+                          label: Text('Open Syllabus PDF', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.bold)),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.red[700],
+                            side: BorderSide(color: Colors.red[300]!),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                          ),
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 24),
+
+                    // Gained Skills List
+                    Text(
+                      'ACADEMIC SKILLS YOU\'LL MASTER',
+                      style: GoogleFonts.outfit(
+                        fontSize: 10,
+                        color: AdyapanTheme.textMuted,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: ['Curriculum Core', 'Critical Evaluation', 'Practical Application'].map((skill) {
+                        return Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: accentColor.withOpacity(0.06),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: accentColor.withOpacity(0.18),
+                              width: 1.2,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.stars_rounded, size: 12, color: accentColor),
+                              const SizedBox(width: 6),
+                              Text(
+                                skill,
+                                style: GoogleFonts.outfit(
+                                  fontSize: 11,
+                                  color: accentColor,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 32),
+
+              // Dynamic Interactive Main Action Button
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: ElevatedButton(
+                  onPressed: isLocked
+                      ? null
+                      : () {
+                          if (!isCompleted) {
+                            state.completeRoadmapNode(subjectKey, activeNode['id']);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('🎉 "${activeNode['title']}" marked complete! +${activeNode['xp'] ?? 75} XP awarded!'),
+                                backgroundColor: const Color(0xFF10B981),
+                                duration: const Duration(seconds: 2),
+                              ),
+                            );
+                          } else {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('✅ Already completed! Go ahead and play Arcade games to earn extra rewards.'),
+                                backgroundColor: Color(0xFF10B981),
+                              ),
+                            );
+                          }
+                          Navigator.pop(context);
+                        },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: isCompleted
+                        ? const Color(0xFF10B981)
+                        : isLocked
+                            ? const Color(0xFFCBD5E1)
+                            : accentColor,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(26),
+                    ),
+                    elevation: isLocked ? 0 : 6,
+                    shadowColor: accentColor.withOpacity(0.3),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        isCompleted
+                            ? Icons.verified_rounded
+                            : isLocked
+                                ? Icons.lock_outline_rounded
+                                : Icons.rocket_launch_rounded,
+                        color: isLocked ? const Color(0xFF94A3B8) : Colors.white,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        isCompleted
+                            ? 'Complete / Revise Pathway'
+                            : isLocked
+                                ? '🔒 Milestone Locked'
+                                : 'Start Learning & Complete Quest',
+                        style: GoogleFonts.fredoka(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: isLocked ? const Color(0xFF94A3B8) : Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+IconData _getSubjectIcon(String subjectName) {
+  final name = subjectName.toLowerCase();
+  if (name.contains('math') || name.contains('📐')) return Icons.calculate_rounded;
+  if (name.contains('science') || name.contains('⚛️')) return Icons.science_rounded;
+  if (name.contains('english') || name.contains('📖')) return Icons.translate_rounded;
+  if (name.contains('social') || name.contains('🌍')) return Icons.public_rounded;
+  if (name.contains('commerce') || name.contains('business')) return Icons.trending_up_rounded;
+  if (name.contains('humanity') || name.contains('humanities')) return Icons.palette_rounded;
+  return Icons.book_rounded;
 }

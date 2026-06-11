@@ -1,6 +1,8 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../core/theme.dart';
 import '../core/app_state.dart';
 
@@ -16,13 +18,21 @@ class _NotesLibraryScreenState extends State<NotesLibraryScreen> {
   final Map<int, double> _downloadProgress = {};
   final Map<int, bool> _isDownloaded = {};
 
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Provider.of<AppState>(context, listen: false).syncHomeworkAndNotesFromDb();
+    });
+  }
+
   final List<String> _subjects = [
     'All',
-    '📐 Mathematics',
-    '⚛️ Science',
-    '📖 English',
-    '💻 Computer Science',
-    '🌍 Social Studies',
+    'Mathematics',
+    'Science',
+    'English',
+    'Computer Science',
+    'Social Studies',
   ];
 
   Color _subjectColor(String subject) {
@@ -85,7 +95,39 @@ class _NotesLibraryScreenState extends State<NotesLibraryScreen> {
     });
   }
 
+  Future<void> _openNoteFile(BuildContext context, String fileUrl, String title) async {
+    if (fileUrl.startsWith('http')) {
+      final uri = Uri.tryParse(fileUrl);
+      if (uri != null && await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+        return;
+      }
+    } else {
+      final file = File(fileUrl);
+      if (file.existsSync()) {
+        final uri = Uri.file(fileUrl);
+        if (await canLaunchUrl(uri)) {
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+          return;
+        }
+      }
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Could not open file URL: $fileUrl')),
+    );
+  }
+
   void _showNoteReader(Map<String, dynamic> note) {
+    final state = Provider.of<AppState>(context, listen: false);
+    final fileUrl = note['filePath'] as String? ?? '';
+    final fileName = note['fileName'] as String? ?? '';
+    final isImage = fileUrl.toLowerCase().endsWith('.png') ||
+                    fileUrl.toLowerCase().endsWith('.jpg') ||
+                    fileUrl.toLowerCase().endsWith('.jpeg') ||
+                    fileName.toLowerCase().endsWith('.png') ||
+                    fileName.toLowerCase().endsWith('.jpg') ||
+                    fileName.toLowerCase().endsWith('.jpeg');
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -183,9 +225,9 @@ class _NotesLibraryScreenState extends State<NotesLibraryScreen> {
                               spacing: 8,
                               runSpacing: 8,
                               children: [
-                                _infoChip('👤 ${note['uploadedBy']}'),
-                                _infoChip('📅 ${note['uploadedAt']}'),
-                                _infoChip('${note['subject']}'),
+                                _infoChip('Teacher: ${note['uploadedBy']}'),
+                                _infoChip('Date: ${note['uploadedAt']}'),
+                                _infoChip('Subject: ${note['subject']}'),
                               ],
                             ),
                           ],
@@ -193,40 +235,81 @@ class _NotesLibraryScreenState extends State<NotesLibraryScreen> {
                       ),
                       const SizedBox(height: 16),
 
-                      // Simulated PDF pages
+                      // Preview (Real image if it's an image note, simulated pages if PDF)
                       Text('Preview', style: GoogleFonts.fredoka(fontSize: 14, fontWeight: FontWeight.bold, color: AdyapanTheme.textMain)),
                       const SizedBox(height: 10),
-                      ...List.generate(note['pages'] > 3 ? 3 : note['pages'], (pageIndex) {
-                        return Container(
+                      if (isImage && fileUrl.isNotEmpty)
+                        Container(
                           margin: const EdgeInsets.only(bottom: 16),
                           decoration: BoxDecoration(
                             color: Colors.white,
                             borderRadius: BorderRadius.circular(12),
                             boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 8, offset: const Offset(0, 3))],
+                            border: Border.all(color: const Color(0xFFE2E8F0)),
                           ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              // Page header bar
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                                decoration: BoxDecoration(
-                                  color: _subjectBg(note['subject']),
-                                  borderRadius: const BorderRadius.only(topLeft: Radius.circular(12), topRight: Radius.circular(12)),
-                                  border: Border(bottom: BorderSide(color: _subjectColor(note['subject']).withOpacity(0.2))),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: fileUrl.startsWith('http')
+                                ? Image.network(
+                                    fileUrl,
+                                    fit: BoxFit.contain,
+                                    errorBuilder: (context, error, stackTrace) {
+                                      return Padding(
+                                        padding: const EdgeInsets.symmetric(vertical: 40),
+                                        child: Center(
+                                          child: Text(
+                                            state.translate('Image could not be loaded.'),
+                                            style: GoogleFonts.outfit(color: Colors.grey),
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  )
+                                : (File(fileUrl).existsSync()
+                                    ? Image.file(File(fileUrl), fit: BoxFit.contain)
+                                    : Padding(
+                                        padding: const EdgeInsets.symmetric(vertical: 40),
+                                        child: Center(
+                                          child: Text(
+                                            state.translate('Local file does not exist.'),
+                                            style: GoogleFonts.outfit(color: Colors.grey),
+                                          ),
+                                        ),
+                                      )),
+                          ),
+                        )
+                      else
+                        ...List.generate(note['pages'] > 3 ? 3 : note['pages'], (pageIndex) {
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 16),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(12),
+                              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 8, offset: const Offset(0, 3))],
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // Page header bar
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color: _subjectBg(note['subject']),
+                                    borderRadius: const BorderRadius.only(topLeft: Radius.circular(12), topRight: Radius.circular(12)),
+                                    border: Border(bottom: BorderSide(color: _subjectColor(note['subject']).withOpacity(0.2))),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Text('Page ${pageIndex + 1}', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.bold, color: _subjectColor(note['subject']))),
+                                      const Spacer(),
+                                      Expanded(
+                                        child: Text(note['fileName'], style: GoogleFonts.outfit(fontSize: 9, color: AdyapanTheme.textMuted), textAlign: TextAlign.right, overflow: TextOverflow.ellipsis),
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                                child: Row(
-                                  children: [
-                                    Text('Page ${pageIndex + 1}', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.bold, color: _subjectColor(note['subject']))),
-                                    const Spacer(),
-                                    Expanded(
-                                      child: Text(note['fileName'], style: GoogleFonts.outfit(fontSize: 9, color: AdyapanTheme.textMuted), textAlign: TextAlign.right, overflow: TextOverflow.ellipsis),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              // Simulated text lines
-                              Padding(
+                                // Simulated text lines
+                                Padding(
                                 padding: const EdgeInsets.all(14),
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -325,7 +408,20 @@ class _NotesLibraryScreenState extends State<NotesLibraryScreen> {
                         SizedBox(
                           width: double.infinity,
                           child: ElevatedButton.icon(
-                            onPressed: () => _simulateDownload(id, note['fileName'], state),
+                            onPressed: () {
+                              if (isDone) {
+                                final fileUrl = note['filePath'] as String? ?? '';
+                                if (fileUrl.isNotEmpty) {
+                                  _openNoteFile(context, fileUrl, note['title'] ?? 'Document');
+                                } else {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text('No file url found for this note.')),
+                                  );
+                                }
+                              } else {
+                                _simulateDownload(id, note['fileName'], state);
+                              }
+                            },
                             icon: Icon(isDone ? Icons.folder_open_rounded : Icons.download_rounded, size: 18, color: Colors.white),
                             label: Text(
                               isDone ? 'Open Downloaded File' : (progress != null ? 'Downloading ${(progress * 100).toInt()}%...' : 'Download PDF (${note['fileSize']})'),
@@ -474,7 +570,7 @@ class _NotesLibraryScreenState extends State<NotesLibraryScreen> {
     // Filter logic
     final filteredNotes = state.notesList.where((n) {
       if (_selectedFilter == 'All') return true;
-      return n['subject'].trim().toLowerCase().contains(_selectedFilter.replaceFirst(RegExp(r'^[^\w]+'), '').trim().toLowerCase());
+      return n['subject'].trim().toLowerCase().contains(_selectedFilter.trim().toLowerCase());
     }).toList();
 
     return Scaffold(
@@ -511,7 +607,7 @@ class _NotesLibraryScreenState extends State<NotesLibraryScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                '📚 Learning Library',
+                                'Learning Library',
                                 style: GoogleFonts.fredoka(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
                               ),
                               Text(
@@ -563,29 +659,40 @@ class _NotesLibraryScreenState extends State<NotesLibraryScreen> {
 
           // ── NOTES GRID ──
           Expanded(
-            child: filteredNotes.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Text('📭', style: TextStyle(fontSize: 56)),
-                        const SizedBox(height: 14),
-                        Text('No study notes found', style: GoogleFonts.fredoka(fontSize: 16, fontWeight: FontWeight.bold, color: AdyapanTheme.textMain)),
-                        Text('Try selecting another subject filter', style: GoogleFonts.outfit(fontSize: 11, color: AdyapanTheme.textMuted)),
-                      ],
+            child: RefreshIndicator(
+              onRefresh: () => state.syncHomeworkAndNotesFromDb(),
+              color: const Color(0xFF2563EB),
+              child: filteredNotes.isEmpty
+                  ? SingleChildScrollView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      child: SizedBox(
+                        height: MediaQuery.of(context).size.height * 0.6,
+                        child: Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(Icons.folder_off_rounded, size: 56, color: AdyapanTheme.textMuted),
+                              const SizedBox(height: 14),
+                              Text('No study notes found', style: GoogleFonts.fredoka(fontSize: 16, fontWeight: FontWeight.bold, color: AdyapanTheme.textMain)),
+                              Text('Try selecting another subject filter', style: GoogleFonts.outfit(fontSize: 11, color: AdyapanTheme.textMuted)),
+                            ],
+                          ),
+                        ),
+                      ),
+                    )
+                  : GridView.builder(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 40),
+                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 2,
+                        crossAxisSpacing: 14,
+                        mainAxisSpacing: 14,
+                        childAspectRatio: 0.82,
+                      ),
+                      itemCount: filteredNotes.length,
+                      itemBuilder: (context, i) => _buildNoteCard(filteredNotes[i]),
                     ),
-                  )
-                : GridView.builder(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 40),
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      crossAxisSpacing: 14,
-                      mainAxisSpacing: 14,
-                      childAspectRatio: 0.82,
-                    ),
-                    itemCount: filteredNotes.length,
-                    itemBuilder: (context, i) => _buildNoteCard(filteredNotes[i]),
-                  ),
+            ),
           ),
         ],
       ),

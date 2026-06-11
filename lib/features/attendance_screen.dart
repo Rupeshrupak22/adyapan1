@@ -32,7 +32,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     final timeStr = '$hour:$min $ampm';
 
     appState.markAttendance(
-      '🎒 Leave: $selectedReason',
+      'Leave: $selectedReason',
       'Excused',
       timeStr,
       source: 'Manual',
@@ -40,7 +40,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
 
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('🎉 Leave Application submitted successfully to Class Teacher!'),
+        content: Text('Leave Application submitted successfully to Class Teacher!'),
         backgroundColor: AdyapanTheme.green,
       ),
     );
@@ -51,6 +51,168 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     if (status == 'Present') return AdyapanTheme.green;
     if (status == 'Excused') return AdyapanTheme.purple;
     return Colors.redAccent;
+  }
+
+  void _showSubjectAttendanceHistory(BuildContext context, Map<String, dynamic> log) {
+    final subjectName = log['subject'] as String;
+    final currentStatus = log['status'] as String;
+    final source = log['source'] as String? ?? 'Live Class';
+    
+    final List<Map<String, dynamic>> history = [];
+    final now = DateTime.now();
+    
+    final statuses = currentStatus == 'Absent' 
+        ? ['Absent', 'Present', 'Present', 'Absent', 'Present', 'Present']
+        : (currentStatus == 'Excused' 
+            ? ['Excused', 'Present', 'Present', 'Present', 'Present', 'Present']
+            : ['Present', 'Present', 'Present', 'Present', 'Present', 'Present']);
+    
+    final sources = [
+      source,
+      'Live Class',
+      'Recorded Video',
+      'Live Class',
+      'Live Class',
+      'Recorded Video'
+    ];
+    
+    for (int i = 0; i < 6; i++) {
+      final date = now.subtract(Duration(days: i));
+      final List<String> weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+      final List<String> months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      final dateStr = '${weekdays[date.weekday - 1]}, ${date.day} ${months[date.month - 1]}';
+      
+      history.add({
+        'date': dateStr,
+        'status': statuses[i],
+        'source': sources[i],
+        'time': log['time'] ?? '10:30 AM',
+      });
+    }
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) {
+        return Container(
+          padding: const EdgeInsets.all(20),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.only(
+              topLeft: Radius.circular(30),
+              topRight: Radius.circular(30),
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40, height: 4,
+                  decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10)),
+                ),
+              ),
+              const SizedBox(height: 18),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEFF6FF),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.calendar_month_rounded, color: Color(0xFF2563EB), size: 24),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          subjectName,
+                          style: GoogleFonts.fredoka(fontSize: 16, fontWeight: FontWeight.bold, color: const Color(0xFF1E3A8A)),
+                        ),
+                        Text(
+                          'Subject-wise Date History',
+                          style: GoogleFonts.outfit(fontSize: 11, color: AdyapanTheme.textMuted, fontWeight: FontWeight.w600),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              const Divider(color: Color(0xFFE2E8F0)),
+              const SizedBox(height: 10),
+              Flexible(
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: history.length,
+                  itemBuilder: (ctx, idx) {
+                    final item = history[idx];
+                    final status = item['status'] as String;
+                    final color = _getStatusColor(status);
+                    IconData icon;
+                    if (status == 'Present') {
+                      icon = Icons.check_circle_rounded;
+                    } else if (status == 'Excused') {
+                      icon = Icons.info_rounded;
+                    } else {
+                      icon = Icons.cancel_rounded;
+                    }
+                    
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8.0),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                item['date'] as String,
+                                style: GoogleFonts.fredoka(fontSize: 13, fontWeight: FontWeight.bold, color: const Color(0xFF1E293B)),
+                              ),
+                              const SizedBox(height: 2),
+                              Row(
+                                children: [
+                                  Text(
+                                    '${item['source']} • ${item['time']}',
+                                    style: GoogleFonts.outfit(fontSize: 10, color: AdyapanTheme.textMuted, fontWeight: FontWeight.w500),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                          Row(
+                            children: [
+                              Icon(icon, color: color, size: 16),
+                              const SizedBox(width: 6),
+                              Text(
+                                status,
+                                style: GoogleFonts.fredoka(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                  color: color,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 20),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -70,7 +232,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF1F5F9),
       appBar: AppBar(
-        title: Text('📅 Attendance Portal', style: GoogleFonts.fredoka(fontWeight: FontWeight.bold, color: const Color(0xFF1E3A8A))),
+        title: Text('Attendance Portal', style: GoogleFonts.fredoka(fontWeight: FontWeight.bold, color: const Color(0xFF1E3A8A))),
         backgroundColor: Colors.white.withOpacity(0.8),
         elevation: 0,
         iconTheme: const IconThemeData(color: Color(0xFF1E3A8A)),
@@ -111,7 +273,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                 child: Column(
                   children: [
                     Text(
-                      attendancePercentage >= 85 ? '🔥 Highly Consistent!' : '⚠️ Needs Focus!',
+                      attendancePercentage >= 85 ? 'Highly Consistent!' : 'Needs Focus!',
                       style: GoogleFonts.fredoka(
                         fontSize: 16, 
                         fontWeight: FontWeight.bold, 
@@ -170,55 +332,67 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                 Color srcColor = AdyapanTheme.textMuted;
                 if (source == 'Live Class') { srcIcon = Icons.videocam_rounded; srcColor = const Color(0xFFEF4444); }
                 if (source == 'Recorded Video') { srcIcon = Icons.play_circle_rounded; srcColor = const Color(0xFF8B5CF6); }
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 10.0),
-                  child: Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.82),
-                      border: Border.all(color: const Color(0xFF3B82F6).withOpacity(0.12), width: 1.2),
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.02),
-                          blurRadius: 6,
-                          offset: const Offset(0, 2),
-                        )
-                      ],
-                    ),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(log['subject'] as String, style: GoogleFonts.fredoka(fontSize: 13, fontWeight: FontWeight.bold)),
-                              const SizedBox(height: 4),
-                              Row(
-                                children: [
-                                  Icon(srcIcon, size: 11, color: srcColor),
-                                  const SizedBox(width: 4),
-                                  Text(source, style: GoogleFonts.outfit(fontSize: 10, color: srcColor, fontWeight: FontWeight.bold)),
-                                  const SizedBox(width: 8),
-                                  Text('• ${log['time']}', style: GoogleFonts.outfit(fontSize: 10, color: AdyapanTheme.textMuted)),
-                                ],
-                              ),
-                            ],
+                return GestureDetector(
+                  onTap: () => _showSubjectAttendanceHistory(context, log),
+                  child: Padding(
+                    padding: const EdgeInsets.only(bottom: 10.0),
+                    child: Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.82),
+                        border: Border.all(color: const Color(0xFF3B82F6).withOpacity(0.12), width: 1.2),
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.02),
+                            blurRadius: 6,
+                            offset: const Offset(0, 2),
+                          )
+                        ],
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(log['subject'] as String, style: GoogleFonts.fredoka(fontSize: 13, fontWeight: FontWeight.bold)),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Icon(Icons.calendar_month_rounded, size: 14, color: Colors.blueAccent.withOpacity(0.6)),
+                                  ],
+                                ),
+                                const SizedBox(height: 4),
+                                Row(
+                                  children: [
+                                    Icon(srcIcon, size: 11, color: srcColor),
+                                    const SizedBox(width: 4),
+                                    Text(source, style: GoogleFonts.outfit(fontSize: 10, color: srcColor, fontWeight: FontWeight.bold)),
+                                    const SizedBox(width: 8),
+                                    Text('• ${log['time']}', style: GoogleFonts.outfit(fontSize: 10, color: AdyapanTheme.textMuted)),
+                                  ],
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: color.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: color),
-                          ),
-                          child: Text(
-                            status,
-                            style: GoogleFonts.fredoka(fontSize: 10, fontWeight: FontWeight.bold, color: color),
-                          ),
-                        )
-                      ],
+                          const SizedBox(width: 10),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: color.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(color: color),
+                            ),
+                            child: Text(
+                              status,
+                              style: GoogleFonts.fredoka(fontSize: 10, fontWeight: FontWeight.bold, color: color),
+                            ),
+                          )
+                        ],
+                      ),
                     ),
                   ),
                 );

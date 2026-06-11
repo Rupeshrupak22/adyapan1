@@ -2,63 +2,96 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:confetti/confetti.dart';
+import '../core/flutter_dnd.dart';
 import '../core/theme.dart';
 import '../core/app_state.dart';
 
 class FocusScreen extends StatefulWidget {
-  const FocusScreen({Key? key}) : super(key: key);
+  const FocusScreen({super.key});
 
   @override
   State<FocusScreen> createState() => _FocusScreenState();
 }
 
-class _FocusScreenState extends State<FocusScreen> with SingleTickerProviderStateMixin {
+class _FocusScreenState extends State<FocusScreen>
+    with SingleTickerProviderStateMixin {
   late TabController _tabController;
   late ConfettiController _confettiController;
-  
-  // Timer state
+
+  // ── Pomodoro Timer ──
   Timer? _timer;
-  int _selectedDurationMinutes = 25; // 15, 25, 45, 60 mins configuration
+  int _selectedDurationMinutes = 25;
   int _secondsLeft = 25 * 60;
   bool _isRunning = false;
-  
-  // App Shield State
-  bool _shieldEngaged = false;
-  int _blockedNotifsCount = 0;
-  Timer? _spawnerTimer;
-  List<Map<String, String>> _activeShieldNotifications = [];
-  String _selectedSoundMode = 'Silence 🤫';
 
-  // Relatable Indian/Student funny notifications pool
-  final List<Map<String, String>> _funnyNotificationsPool = [
-    {'app': 'Mummy 👩', 'msg': 'Beta, phone rkh ke market se dhaniya le ao! 🌿', 'time': 'Just now'},
-    {'app': 'Papa 🧔', 'msg': 'Sharma ji ka beta 98% laya hai. Tum kya kr rhe ho? 📈', 'time': 'Just now'},
-    {'app': 'WhatsApp 🟢', 'msg': 'Homework copy krke submit kro fast! 📝', 'time': 'Just now'},
-    {'app': 'Bhai 👦', 'msg': 'TV remote kahan chhupaya hai? Pata chala to pitoge! 📺', 'time': 'Just now'},
-    {'app': 'Instagram 📸', 'msg': 'Your crush updated their story! Click to view 👀', 'time': 'Just now'},
-    {'app': 'Free Fire 🔥', 'msg': 'Squad is waiting! Custom room match starting in 2m! 🎮', 'time': 'Just now'},
-    {'app': 'YouTube 🔴', 'msg': 'New video: "Exam in 1 day? Watch this cheat sheet" 🤯', 'time': 'Just now'},
-    {'app': 'Didi 👩‍🦰', 'msg': 'Mummy ko tumhari chat dikha dungi agar remote nahi diya! 🤫', 'time': 'Just now'},
-    {'app': 'Zomato 🍕', 'msg': 'Junk food is calling! Double cheese pizza at ₹99! 🤤', 'time': 'Just now'},
-    {'app': 'Snapchat 👻', 'msg': 'Sarah sent a snap! (Don\'t break 100-day streak!) 🔥', 'time': 'Just now'},
-  ];
+  // ── DND / Focus Shield ──
+  bool _dndGranted = false;
+  bool _shieldActive = false; // true when DND is ON
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
-    _confettiController = ConfettiController(duration: const Duration(seconds: 2));
+    _confettiController =
+        ConfettiController(duration: const Duration(seconds: 3));
     _secondsLeft = _selectedDurationMinutes * 60;
+    _checkDndPermission();
   }
 
   @override
   void dispose() {
     _timer?.cancel();
-    _spawnerTimer?.cancel();
+    // Always restore notifications when screen is left
+    if (_shieldActive) _disableDnd();
     _tabController.dispose();
     _confettiController.dispose();
     super.dispose();
   }
+
+  // ── DND Helpers ──
+
+  Future<void> _checkDndPermission() async {
+    try {
+      final granted = await FlutterDnd.isNotificationPolicyAccessGranted;
+      if (mounted) {
+        setState(() {
+          _dndGranted = granted ?? false;
+        });
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _requestDndPermission() async {
+    // Opens Android's DND access settings page (returns void, no await needed)
+    FlutterDnd.gotoPolicySettings();
+    // Re-check after returning from settings
+    await Future.delayed(const Duration(milliseconds: 800));
+    await _checkDndPermission();
+  }
+
+  Future<void> _enableDnd() async {
+    try {
+      // INTERRUPTION_FILTER_NONE = total silence, no notifications at all
+      await FlutterDnd.setInterruptionFilter(
+          FlutterDnd.INTERRUPTION_FILTER_NONE);
+      if (mounted) setState(() => _shieldActive = true);
+    } catch (e) {
+      debugPrint('DND enable failed: $e');
+    }
+  }
+
+  Future<void> _disableDnd() async {
+    try {
+      // INTERRUPTION_FILTER_ALL = normal mode, all notifications allowed
+      await FlutterDnd.setInterruptionFilter(
+          FlutterDnd.INTERRUPTION_FILTER_ALL);
+      if (mounted) setState(() => _shieldActive = false);
+    } catch (e) {
+      debugPrint('DND disable failed: $e');
+    }
+  }
+
+  // ── Timer Controls ──
 
   void _changeDuration(int minutes) {
     if (_isRunning) return;
@@ -68,184 +101,331 @@ class _FocusScreenState extends State<FocusScreen> with SingleTickerProviderStat
     });
   }
 
-  void _startTimer() {
+  Future<void> _startTimer() async {
     if (_isRunning) return;
-    setState(() {
-      _isRunning = true;
-    });
+
+    // Check DND permission before starting
+    if (!_dndGranted) {
+      await _checkDndPermission();
+      if (!_dndGranted) {
+        if (!mounted) return;
+        _showPermissionDialog();
+        return;
+      }
+    }
+
+    // Enable DND — block all notifications
+    await _enableDnd();
+
+    setState(() => _isRunning = true);
+
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
       if (_secondsLeft > 0) {
-        setState(() {
-          _secondsLeft--;
-        });
+        setState(() => _secondsLeft--);
       } else {
-        _timer?.cancel();
-        setState(() {
-          _secondsLeft = _selectedDurationMinutes * 60;
-          _isRunning = false;
-        });
-        _confettiController.play();
-        
-        // Log study duration to AppState & gain XP!
-        Provider.of<AppState>(context, listen: false).logStudySession(_selectedDurationMinutes);
-        
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('🎉 Outstanding! You completed $_selectedDurationMinutes mins of deep study! (+${_selectedDurationMinutes * 2} XP)'), 
-            backgroundColor: AdyapanTheme.green,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        timer.cancel();
+        _onTimerComplete();
       }
     });
   }
 
-  void _pauseTimer() {
-    _timer?.cancel();
+  Future<void> _onTimerComplete() async {
+    // Re-enable notifications first
+    await _disableDnd();
+
+    final state = Provider.of<AppState>(context, listen: false);
+    state.logStudySession(_selectedDurationMinutes);
+    _confettiController.play();
+
     setState(() {
+      _secondsLeft = _selectedDurationMinutes * 60;
       _isRunning = false;
     });
+
+    if (mounted) {
+      final messenger = ScaffoldMessenger.of(context);
+      final mins = _selectedDurationMinutes;
+      messenger.showSnackBar(SnackBar(
+        content: Text(
+          '$mins min session complete! +${mins * 2} XP. Notifications restored.',
+          style: AdyapanTheme.fredoka(fontSize: 13, color: Colors.white),
+        ),
+        backgroundColor: AdyapanTheme.green,
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 4),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      ));
+    }
   }
 
-  void _resetTimer() {
+  Future<void> _pauseTimer() async {
     _timer?.cancel();
+    // Restore notifications when paused
+    await _disableDnd();
+    setState(() => _isRunning = false);
+  }
+
+  Future<void> _resetTimer() async {
+    _timer?.cancel();
+    await _disableDnd();
     setState(() {
       _secondsLeft = _selectedDurationMinutes * 60;
       _isRunning = false;
     });
   }
 
-  String _formatTime(int totalSeconds) {
-    int minutes = totalSeconds ~/ 60;
-    int seconds = totalSeconds % 60;
-    return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
-  }
-
-  void _toggleShield() {
+  Future<void> _logAndStop() async {
+    _timer?.cancel();
+    final state = Provider.of<AppState>(context, listen: false);
+    int minutesStudied =
+        ((_selectedDurationMinutes * 60 - _secondsLeft) / 60).ceil();
+    await _disableDnd();
+    if (minutesStudied > 0) {
+      state.logStudySession(minutesStudied);
+    }
     setState(() {
-      _shieldEngaged = !_shieldEngaged;
-      if (_shieldEngaged) {
-        _activeShieldNotifications = [
-          {'app': 'WhatsApp 🟢', 'msg': 'Sharma ji: Beta boards ki taiyari chal rhi hai? 🧐', 'time': 'Just now'},
-          {'app': 'Instagram 📸', 'msg': 'Crush commented on your post! ❤️', 'time': '1m ago'}
-        ];
-        _blockedNotifsCount = _activeShieldNotifications.length;
-        _startNotificationSpawner();
-      } else {
-        _spawnerTimer?.cancel();
-        _activeShieldNotifications.clear();
-        _blockedNotifsCount = 0;
-      }
+      _secondsLeft = _selectedDurationMinutes * 60;
+      _isRunning = false;
     });
-  }
-
-  void _startNotificationSpawner() {
-    _spawnerTimer?.cancel();
-    _spawnerTimer = Timer.periodic(const Duration(seconds: 10), (timer) {
-      if (!mounted || !_shieldEngaged) {
-        timer.cancel();
-        return;
-      }
-      
-      final random = DateTime.now().millisecond % _funnyNotificationsPool.length;
-      final newNotif = Map<String, String>.from(_funnyNotificationsPool[random]);
-      
-      setState(() {
-        _activeShieldNotifications.insert(0, newNotif);
-        _blockedNotifsCount++;
-      });
-    });
-  }
-
-  void _deflectNotification(int index) {
-    if (index >= 0 && index < _activeShieldNotifications.length) {
-      setState(() {
-        _activeShieldNotifications.removeAt(index);
-      });
-      
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('⚡ Distraction Deflected! +5 Focus XP!'),
-          backgroundColor: AdyapanTheme.green,
-          duration: const Duration(milliseconds: 800),
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+    if (mounted && minutesStudied > 0) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(
+          'Logged $minutesStudied min! +${minutesStudied * 2} XP. Notifications restored.',
+          style: AdyapanTheme.fredoka(fontSize: 13, color: Colors.white),
         ),
-      );
+        backgroundColor: AdyapanTheme.blueAccent,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      ));
     }
   }
 
-  // Focus Statistics Dashboard Widget
-  Widget _buildFocusStatsCard(AppState state) {
+  String _formatTime(int totalSeconds) {
+    int m = totalSeconds ~/ 60;
+    int s = totalSeconds % 60;
+    return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+  }
+
+  // ── Permission Dialog ──
+  void _showPermissionDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AdyapanTheme.cyan.withOpacity(0.12),
+                shape: BoxShape.circle,
+              ),
+              child:
+                  const Icon(Icons.shield_rounded, color: AdyapanTheme.cyan),
+            ),
+            const SizedBox(width: 12),
+            Text('Allow Focus Shield',
+                style: AdyapanTheme.fredoka(
+                    fontSize: 16, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Text(
+          'Focus Shield needs "Do Not Disturb" access to block all phone notifications while you study.\n\nTap "Open Settings" → find Adyapan → toggle ON.',
+          style: AdyapanTheme.outfit(
+              fontSize: 13, color: AdyapanTheme.textSub, height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('Later',
+                style: AdyapanTheme.fredoka(color: AdyapanTheme.textMuted)),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await _requestDndPermission();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AdyapanTheme.cyan,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+            ),
+            child: Text('Open Settings',
+                style: AdyapanTheme.fredoka(
+                    color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Focus Rank ──
+  String _getFocusRank(int count) {
+    if (count > 6) return 'Zen Master';
+    if (count > 4) return 'Focus Guru';
+    if (count > 2) return 'Explorer';
+    return 'Rookie';
+  }
+
+  // ── UI ──
+
+  Widget _buildStatsBar(AppState state) {
     return Container(
-      padding: const EdgeInsets.all(16),
-      margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+      margin: const EdgeInsets.fromLTRB(20, 0, 20, 10),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: AdyapanTheme.glassBorder),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
+            color: Colors.black.withOpacity(0.03),
             blurRadius: 10,
             offset: const Offset(0, 4),
           )
-        ]
+        ],
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          _buildStatColumn('Current Streak', '${state.streak} Days 🔥', AdyapanTheme.pink),
-          Container(width: 1, height: 35, color: AdyapanTheme.glassBorder),
-          _buildStatColumn('Total Study', '${state.studySessions.fold(0, (a, b) => a + b)}m 📊', AdyapanTheme.blueAccent),
-          Container(width: 1, height: 35, color: AdyapanTheme.glassBorder),
-          _buildStatColumn('Focus Rank', _getFocusRank(state.studySessions.length), AdyapanTheme.green),
+          _statCell('Streak', '${state.streak} Days', AdyapanTheme.pink),
+          Container(width: 1, height: 30, color: AdyapanTheme.glassBorder),
+          _statCell(
+            'Total Study',
+            '${state.studySessions.fold(0, (a, b) => a + b)}m',
+            AdyapanTheme.blueAccent,
+          ),
+          Container(width: 1, height: 30, color: AdyapanTheme.glassBorder),
+          _statCell(
+            'Rank',
+            _getFocusRank(state.studySessions.length),
+            AdyapanTheme.green,
+          ),
         ],
       ),
     );
   }
 
-  String _getFocusRank(int sessionCount) {
-    if (sessionCount > 6) return 'Zen Master 👑';
-    if (sessionCount > 4) return 'Focus Guru 🧠';
-    if (sessionCount > 2) return 'Focus Explorer 🚀';
-    return 'Rookie Focus 👶';
-  }
-
-  Widget _buildStatColumn(String label, String value, Color color) {
+  Widget _statCell(String label, String value, Color color) {
     return Column(
       children: [
-        Text(
-          label.toUpperCase(),
-          style: AdyapanTheme.outfit(fontSize: 9, color: AdyapanTheme.textMuted, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          value,
-          style: AdyapanTheme.fredoka(fontSize: 13, color: color, fontWeight: FontWeight.bold),
-        ),
+        Text(label.toUpperCase(),
+            style: AdyapanTheme.outfit(
+                fontSize: 9,
+                color: AdyapanTheme.textMuted,
+                fontWeight: FontWeight.bold)),
+        const SizedBox(height: 3),
+        Text(value,
+            style: AdyapanTheme.fredoka(
+                fontSize: 13, color: color, fontWeight: FontWeight.bold)),
       ],
     );
   }
 
-  // TAB 1: STUDY ROOM (POMODORO & TASK LIST)
-  Widget _buildStudyRoom(AppState state) {
-    double progress = (_selectedDurationMinutes * 60 - _secondsLeft) / (_selectedDurationMinutes * 60);
+  // ── TAB 1: Pomodoro ──
+  Widget _buildPomodoroTab(AppState state) {
+    final double progress = _secondsLeft == _selectedDurationMinutes * 60
+        ? 0
+        : (_selectedDurationMinutes * 60 - _secondsLeft) /
+            (_selectedDurationMinutes * 60);
 
     return Column(
       children: [
-        // Circular Clock
+        const SizedBox(height: 12),
+
+        // ── DND permission banner ──
+        if (!_dndGranted)
+          GestureDetector(
+            onTap: _showPermissionDialog,
+            child: Container(
+              margin: const EdgeInsets.only(bottom: 16),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              decoration: BoxDecoration(
+                color: AdyapanTheme.orange.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                    color: AdyapanTheme.orange.withOpacity(0.3)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.warning_amber_rounded,
+                      color: AdyapanTheme.orange, size: 18),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Tap here to allow notification blocking for Focus Shield',
+                      style: AdyapanTheme.outfit(
+                          fontSize: 12,
+                          color: AdyapanTheme.orange,
+                          fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  const Icon(Icons.arrow_forward_ios_rounded,
+                      color: AdyapanTheme.orange, size: 14),
+                ],
+              ),
+            ),
+          ),
+
+        // ── Active DND status pill ──
+        if (_shieldActive)
+          Container(
+            margin: const EdgeInsets.only(bottom: 16),
+            padding:
+                const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+            decoration: BoxDecoration(
+              color: AdyapanTheme.cyan.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(50),
+              border: Border.all(
+                  color: AdyapanTheme.cyan.withOpacity(0.4)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: const BoxDecoration(
+                    color: AdyapanTheme.cyan,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'Focus Shield ON — All notifications blocked',
+                  style: AdyapanTheme.outfit(
+                      fontSize: 12,
+                      color: AdyapanTheme.cyan,
+                      fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+          ),
+
+        // ── Circular timer ──
         Stack(
           alignment: Alignment.center,
           children: [
             SizedBox(
-              width: 170,
-              height: 170,
+              width: 190,
+              height: 190,
               child: CircularProgressIndicator(
                 value: progress,
-                strokeWidth: 12,
+                strokeWidth: 14,
                 backgroundColor: AdyapanTheme.bgLightDark,
-                color: AdyapanTheme.pink,
+                valueColor: AlwaysStoppedAnimation<Color>(
+                  _shieldActive
+                      ? AdyapanTheme.cyan
+                      : _isRunning
+                          ? AdyapanTheme.pink
+                          : AdyapanTheme.blueAccent,
+                ),
                 strokeCap: StrokeCap.round,
               ),
             ),
@@ -254,455 +434,624 @@ class _FocusScreenState extends State<FocusScreen> with SingleTickerProviderStat
               children: [
                 Text(
                   _formatTime(_secondsLeft),
-                  style: AdyapanTheme.fredoka(fontSize: 34, fontWeight: FontWeight.bold),
-                ),
-                Text(
-                  'FOCUS TIMER',
-                  style: AdyapanTheme.outfit(fontSize: 10, color: AdyapanTheme.textMuted, fontWeight: FontWeight.bold),
-                ),
-              ],
-            )
-          ],
-        ),
-        const SizedBox(height: 20),
-
-        // Duration selector pills
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [15, 25, 45, 60].map((mins) {
-            bool selected = _selectedDurationMinutes == mins;
-            return GestureDetector(
-              onTap: () => _changeDuration(mins),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                margin: const EdgeInsets.symmetric(horizontal: 5),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                decoration: BoxDecoration(
-                  color: selected ? AdyapanTheme.pink : Colors.white,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: selected ? Colors.transparent : AdyapanTheme.glassBorder,
-                  ),
-                  boxShadow: selected ? [
-                    BoxShadow(
-                      color: AdyapanTheme.pink.withOpacity(0.3),
-                      blurRadius: 8,
-                      offset: const Offset(0, 3),
-                    )
-                  ] : [],
-                ),
-                child: Text(
-                  '$mins Mins',
                   style: AdyapanTheme.fredoka(
+                      fontSize: 40, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  _shieldActive
+                      ? 'SHIELD ACTIVE'
+                      : _isRunning
+                          ? 'FOCUSING...'
+                          : 'SET TIMER',
+                  style: AdyapanTheme.outfit(
                     fontSize: 11,
-                    color: selected ? Colors.white : AdyapanTheme.textSub,
+                    color: _shieldActive
+                        ? AdyapanTheme.cyan
+                        : _isRunning
+                            ? AdyapanTheme.pink
+                            : AdyapanTheme.textMuted,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-              ),
-            );
-          }).toList(),
+              ],
+            ),
+          ],
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 24),
 
-        // Controls
+        // ── Duration pills ──
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          physics: const BouncingScrollPhysics(),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [15, 25, 45, 60].map((m) {
+                final bool sel = _selectedDurationMinutes == m;
+                return GestureDetector(
+                  onTap: () => _changeDuration(m),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    margin: const EdgeInsets.symmetric(horizontal: 5),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 9),
+                    decoration: BoxDecoration(
+                      color: sel ? AdyapanTheme.pink : Colors.white,
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(
+                        color: sel
+                            ? Colors.transparent
+                            : AdyapanTheme.glassBorder,
+                      ),
+                      boxShadow: sel
+                          ? [
+                              BoxShadow(
+                                color: AdyapanTheme.pink.withOpacity(0.35),
+                                blurRadius: 10,
+                                offset: const Offset(0, 4),
+                              )
+                            ]
+                          : [],
+                    ),
+                    child: Text(
+                      '$m min',
+                      style: AdyapanTheme.fredoka(
+                        fontSize: 12,
+                        color: sel ? Colors.white : AdyapanTheme.textSub,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+        ),
+        const SizedBox(height: 24),
+
+        // ── Controls: Reset | Play/Pause | Log Done ──
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            IconButton(
-              icon: const Icon(Icons.refresh_rounded, color: AdyapanTheme.textSub),
-              iconSize: 28,
-              onPressed: _resetTimer,
+            // Reset
+            _iconBtn(
+              icon: Icons.refresh_rounded,
+              color: AdyapanTheme.textSub,
+              onTap: _isRunning ? _resetTimer : null,
+              enabled: _isRunning,
             ),
             const SizedBox(width: 20),
-            ElevatedButton(
-              onPressed: _isRunning ? _pauseTimer : _startTimer,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AdyapanTheme.pink,
-                shape: const CircleBorder(),
-                padding: const EdgeInsets.all(18),
-                elevation: 4,
-              ),
-              child: Icon(_isRunning ? Icons.pause_rounded : Icons.play_arrow_rounded, color: Colors.white, size: 32),
-            ),
-            const SizedBox(width: 20),
-            IconButton(
-              icon: Icon(Icons.check_circle_outline_rounded, color: progress > 0 ? AdyapanTheme.green : AdyapanTheme.textMuted),
-              iconSize: 28,
-              onPressed: progress > 0 ? () {
-                _timer?.cancel();
-                int minutesStudied = ((_selectedDurationMinutes * 60 - _secondsLeft) / 60).ceil();
-                state.logStudySession(minutesStudied);
-                _resetTimer();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Logged $minutesStudied mins of study! (+${minutesStudied * 2} XP)'), 
-                    backgroundColor: AdyapanTheme.green,
-                    behavior: SnackBarBehavior.floating,
+
+            // Play / Pause — big gradient button
+            GestureDetector(
+              onTap: _isRunning ? _pauseTimer : _startTimer,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 250),
+                width: 72,
+                height: 72,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: _shieldActive
+                        ? [AdyapanTheme.cyan, const Color(0xFF0284C7)]
+                        : [AdyapanTheme.pink, AdyapanTheme.purple],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
                   ),
-                );
-              } : null,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: (_shieldActive
+                              ? AdyapanTheme.cyan
+                              : AdyapanTheme.pink)
+                          .withOpacity(0.45),
+                      blurRadius: 20,
+                      offset: const Offset(0, 6),
+                    )
+                  ],
+                ),
+                child: Icon(
+                  _isRunning
+                      ? Icons.pause_rounded
+                      : Icons.play_arrow_rounded,
+                  color: Colors.white,
+                  size: 36,
+                ),
+              ),
+            ),
+            const SizedBox(width: 20),
+
+            // Log & Stop
+            _iconBtn(
+              icon: Icons.check_circle_outline_rounded,
+              color: progress > 0
+                  ? AdyapanTheme.green
+                  : AdyapanTheme.textMuted,
+              onTap: progress > 0 ? _logAndStop : null,
+              enabled: progress > 0,
             ),
           ],
         ),
-        const SizedBox(height: 25),
+        const SizedBox(height: 32),
 
-        // Ambient Sound Panel
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: AdyapanTheme.glassBorder),
+        // ── What happens when you start ──
+        if (!_isRunning)
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AdyapanTheme.blueAccent.withOpacity(0.05),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                  color: AdyapanTheme.blueAccent.withOpacity(0.15)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('What happens when you press Play:',
+                    style: AdyapanTheme.fredoka(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: AdyapanTheme.blueAccent)),
+                const SizedBox(height: 10),
+                _infoRow(Icons.notifications_off_rounded,
+                    'All phone notifications blocked instantly (WhatsApp, Instagram, everything)'),
+                _infoRow(Icons.timer_rounded,
+                    'Timer counts down — you study distraction-free'),
+                _infoRow(Icons.notifications_active_rounded,
+                    'Notifications automatically restored when timer ends'),
+                _infoRow(Icons.stop_circle_outlined,
+                    'Pause anytime to restore notifications immediately'),
+              ],
+            ),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Row(
-                    children: [
-                      const Icon(Icons.music_note_rounded, color: AdyapanTheme.pink, size: 20),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Ambient Focus Beats',
-                        style: AdyapanTheme.fredoka(fontSize: 13, fontWeight: FontWeight.bold, color: AdyapanTheme.textMain),
-                      ),
-                    ],
-                  ),
-                  EqualizerWave(isPlaying: _isRunning && _selectedSoundMode != 'Silence 🤫'),
-                ],
-              ),
-              const SizedBox(height: 12),
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: ['Silence 🤫', 'Lofi Study 🎵', 'Rainy Day 🌧️', 'Forest Birds 🌲'].map((mode) {
-                    bool active = _selectedSoundMode == mode;
-                    return GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          _selectedSoundMode = mode;
-                        });
-                      },
-                      child: Container(
-                        margin: const EdgeInsets.only(right: 8),
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: active ? AdyapanTheme.blueAccent.withOpacity(0.12) : AdyapanTheme.bgLightDark,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: active ? AdyapanTheme.blueAccent.withOpacity(0.5) : Colors.transparent,
-                          ),
-                        ),
-                        child: Text(
-                          mode,
-                          style: AdyapanTheme.outfit(
-                            fontSize: 11,
-                            color: active ? AdyapanTheme.blueAccent : AdyapanTheme.textSub,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                ),
-              )
-            ],
-          ),
-        ),
-        const SizedBox(height: 25),
 
-        // Interactive Tasks List
+        const SizedBox(height: 28),
+
+        // ── Session Checklist ──
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text('Session Checklist', style: AdyapanTheme.fredoka(fontSize: 16, fontWeight: FontWeight.bold)),
+            Text('Session Checklist',
+                style: AdyapanTheme.fredoka(
+                    fontSize: 16, fontWeight: FontWeight.bold)),
             IconButton(
-              icon: const Icon(Icons.add_circle_outline, color: AdyapanTheme.blueAccent, size: 22),
-              onPressed: () {
-                _showAddTaskDialog(context, state);
-              },
-            )
+              icon: const Icon(Icons.add_circle_outline,
+                  color: AdyapanTheme.blueAccent, size: 22),
+              onPressed: () => _showAddTaskDialog(context, state),
+            ),
           ],
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 8),
         state.todos.isEmpty
-            ? Center(child: Text('All tasks completed! Add some now.', style: AdyapanTheme.outfit(fontSize: 12, color: AdyapanTheme.textMuted)))
+            ? Padding(
+                padding: const EdgeInsets.symmetric(vertical: 24),
+                child: Text(
+                  'No tasks yet. Add tasks to track your session goals.',
+                  style: AdyapanTheme.outfit(
+                      fontSize: 12, color: AdyapanTheme.textMuted),
+                  textAlign: TextAlign.center,
+                ),
+              )
             : ListView.builder(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 itemCount: state.todos.length,
-                itemBuilder: (context, index) {
-                  final todo = state.todos[index];
-                  bool completed = todo['completed'];
-
+                itemBuilder: (ctx, i) {
+                  final todo = state.todos[i];
+                  final done = todo['completed'] as bool;
                   return Card(
                     color: Colors.white,
                     surfaceTintColor: Colors.transparent,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: const BorderSide(color: AdyapanTheme.glassBorder)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      side: const BorderSide(
+                          color: AdyapanTheme.glassBorder),
+                    ),
                     elevation: 0,
                     margin: const EdgeInsets.only(bottom: 10),
                     child: ListTile(
                       dense: true,
                       leading: Checkbox(
-                        value: completed,
+                        value: done,
                         activeColor: AdyapanTheme.green,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-                        onChanged: (val) {
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(4)),
+                        onChanged: (_) {
                           state.toggleTodo(todo['id']);
-                          if (val == true) {
-                            _confettiController.play();
-                          }
+                          if (!done) _confettiController.play();
                         },
                       ),
                       title: Text(
                         todo['title'],
                         style: AdyapanTheme.fredoka(
-                          fontSize: 13, 
-                          color: completed ? AdyapanTheme.textMuted : AdyapanTheme.textMain,
+                          fontSize: 13,
+                          color: done
+                              ? AdyapanTheme.textMuted
+                              : AdyapanTheme.textMain,
                           fontWeight: FontWeight.bold,
                         ).copyWith(
-                          decoration: completed ? TextDecoration.lineThrough : null,
+                          decoration: done
+                              ? TextDecoration.lineThrough
+                              : null,
                         ),
                       ),
                       trailing: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                        decoration: BoxDecoration(color: AdyapanTheme.blueAccent.withOpacity(0.1), borderRadius: BorderRadius.circular(50)),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: AdyapanTheme.blueAccent.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(50),
+                        ),
                         child: Text(
                           todo['tag'],
-                          style: AdyapanTheme.outfit(fontSize: 9, color: AdyapanTheme.blueAccent, fontWeight: FontWeight.bold),
+                          style: AdyapanTheme.outfit(
+                              fontSize: 9,
+                              color: AdyapanTheme.blueAccent,
+                              fontWeight: FontWeight.bold),
                         ),
                       ),
                     ),
                   );
                 },
-              )
+              ),
       ],
     );
   }
 
-  // TAB 2: FOCUS SPACE HUD (SHIELD ENGAGE)
-  Widget _buildFocusSpaceHUD() {
+  Widget _iconBtn({
+    required IconData icon,
+    required Color color,
+    VoidCallback? onTap,
+    bool enabled = true,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        width: 50,
+        height: 50,
+        decoration: BoxDecoration(
+          color: enabled ? Colors.white : AdyapanTheme.bgLightDark,
+          shape: BoxShape.circle,
+          border: Border.all(color: AdyapanTheme.glassBorder),
+          boxShadow: enabled
+              ? [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  )
+                ]
+              : [],
+        ),
+        child: Icon(icon, color: color, size: 24),
+      ),
+    );
+  }
+
+  Widget _infoRow(IconData icon, String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 16, color: AdyapanTheme.blueAccent),
+          const SizedBox(width: 10),
+          Expanded(
+              child: Text(text,
+                  style: AdyapanTheme.outfit(
+                      fontSize: 12,
+                      color: AdyapanTheme.textSub,
+                      height: 1.4))),
+        ],
+      ),
+    );
+  }
+
+  // ── TAB 2: Shield Info ──
+  Widget _buildShieldTab() {
     return Column(
       children: [
-        // Engaged Shield Visualizer
+        const SizedBox(height: 12),
+
+        // Big shield status card
         Container(
           width: double.infinity,
-          padding: const EdgeInsets.all(24),
-          decoration: AdyapanTheme.glassCardDecoration(),
+          padding: const EdgeInsets.all(32),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(
+              color: _shieldActive
+                  ? AdyapanTheme.cyan.withOpacity(0.5)
+                  : AdyapanTheme.glassBorder,
+              width: 1.5,
+            ),
+            boxShadow: _shieldActive
+                ? [
+                    BoxShadow(
+                      color: AdyapanTheme.cyan.withOpacity(0.2),
+                      blurRadius: 30,
+                      spreadRadius: 2,
+                    )
+                  ]
+                : AdyapanTheme.cardShadow,
+          ),
           child: Column(
             children: [
               AnimatedContainer(
-                duration: const Duration(seconds: 1),
-                width: 90,
-                height: 90,
+                duration: const Duration(milliseconds: 500),
+                width: 100,
+                height: 100,
                 decoration: BoxDecoration(
-                  color: _shieldEngaged ? AdyapanTheme.cyan.withOpacity(0.1) : AdyapanTheme.textMuted.withOpacity(0.05),
+                  color: _shieldActive
+                      ? AdyapanTheme.cyan.withOpacity(0.12)
+                      : _dndGranted
+                          ? AdyapanTheme.green.withOpacity(0.08)
+                          : AdyapanTheme.bgLightDark,
                   shape: BoxShape.circle,
                   border: Border.all(
-                    color: _shieldEngaged ? AdyapanTheme.cyan : AdyapanTheme.textMuted.withOpacity(0.3),
-                    width: 4
+                    color: _shieldActive
+                        ? AdyapanTheme.cyan
+                        : _dndGranted
+                            ? AdyapanTheme.green
+                            : AdyapanTheme.textMuted.withOpacity(0.3),
+                    width: 3,
                   ),
-                  boxShadow: _shieldEngaged ? [
-                    BoxShadow(color: AdyapanTheme.cyan.withOpacity(0.3), blurRadius: 20, spreadRadius: 4)
-                  ] : [],
+                  boxShadow: _shieldActive
+                      ? [
+                          BoxShadow(
+                            color: AdyapanTheme.cyan.withOpacity(0.4),
+                            blurRadius: 24,
+                            spreadRadius: 4,
+                          )
+                        ]
+                      : [],
                 ),
-                alignment: Alignment.center,
-                child: Text(
-                  _shieldEngaged ? '🛡️' : '🔘',
-                  style: const TextStyle(fontSize: 40),
+                child: Icon(
+                  _shieldActive
+                      ? Icons.shield_rounded
+                      : _dndGranted
+                          ? Icons.shield_outlined
+                          : Icons.no_encryption_gmailerrorred_rounded,
+                  size: 46,
+                  color: _shieldActive
+                      ? AdyapanTheme.cyan
+                      : _dndGranted
+                          ? AdyapanTheme.green
+                          : AdyapanTheme.textMuted.withOpacity(0.5),
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 20),
               Text(
-                _shieldEngaged ? 'FOCUS SHIELD ACTIVE' : 'SHIELD DEACTIVATED',
-                style: AdyapanTheme.fredoka(fontSize: 16, fontWeight: FontWeight.bold, color: _shieldEngaged ? AdyapanTheme.cyan : AdyapanTheme.textMain),
+                _shieldActive
+                    ? 'FOCUS SHIELD ACTIVE'
+                    : _dndGranted
+                        ? 'SHIELD READY'
+                        : 'PERMISSION REQUIRED',
+                style: AdyapanTheme.fredoka(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: _shieldActive
+                      ? AdyapanTheme.cyan
+                      : _dndGranted
+                          ? AdyapanTheme.green
+                          : AdyapanTheme.textSub,
+                ),
               ),
+              const SizedBox(height: 8),
               Text(
-                _shieldEngaged ? 'Social apps are successfully frozen offline.' : 'Tap freeze switch below to block app notifications!',
-                style: AdyapanTheme.outfit(fontSize: 12, color: AdyapanTheme.textSub),
+                _shieldActive
+                    ? 'All notifications are currently blocked on your phone. Timer is running.'
+                    : _dndGranted
+                        ? 'Press Play on the Pomodoro tab to start blocking notifications automatically.'
+                        : 'Grant Do Not Disturb access so Focus Shield can block all notifications.',
+                style: AdyapanTheme.outfit(
+                    fontSize: 13,
+                    color: AdyapanTheme.textSub,
+                    height: 1.5),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 24),
-              ElevatedButton.icon(
-                onPressed: _toggleShield,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _shieldEngaged ? AdyapanTheme.pink : AdyapanTheme.cyan,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(50)),
-                  minimumSize: const Size(180, 48),
+              if (!_dndGranted)
+                ElevatedButton.icon(
+                  onPressed: _requestDndPermission,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AdyapanTheme.cyan,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(50)),
+                    minimumSize: const Size(220, 50),
+                    shadowColor: AdyapanTheme.cyan.withOpacity(0.4),
+                    elevation: 6,
+                  ),
+                  icon: const Icon(Icons.settings_rounded,
+                      color: Colors.white, size: 18),
+                  label: Text('Grant DND Access',
+                      style: AdyapanTheme.fredoka(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15)),
                 ),
-                icon: Icon(_shieldEngaged ? Icons.do_disturb_on_outlined : Icons.offline_bolt_rounded, color: Colors.white),
-                label: Text(
-                  _shieldEngaged ? 'Disengage Shield' : 'Engage Shield', 
-                  style: AdyapanTheme.fredoka(color: Colors.white, fontWeight: FontWeight.bold)
+              if (_dndGranted && !_shieldActive)
+                ElevatedButton.icon(
+                  onPressed: () {
+                    _tabController.animateTo(0);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AdyapanTheme.pink,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(50)),
+                    minimumSize: const Size(220, 50),
+                    shadowColor: AdyapanTheme.pink.withOpacity(0.4),
+                    elevation: 6,
+                  ),
+                  icon: const Icon(Icons.play_arrow_rounded,
+                      color: Colors.white, size: 20),
+                  label: Text('Start Pomodoro',
+                      style: AdyapanTheme.fredoka(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15)),
                 ),
-              )
+              if (_shieldActive)
+                ElevatedButton.icon(
+                  onPressed: _pauseTimer,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AdyapanTheme.pink,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(50)),
+                    minimumSize: const Size(220, 50),
+                    shadowColor: AdyapanTheme.pink.withOpacity(0.4),
+                    elevation: 6,
+                  ),
+                  icon: const Icon(Icons.pause_rounded,
+                      color: Colors.white, size: 20),
+                  label: Text('Pause & Restore Notifications',
+                      style: AdyapanTheme.fredoka(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14)),
+                ),
             ],
           ),
         ),
-        const SizedBox(height: 30),
-        if (_shieldEngaged) ...[
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: AdyapanTheme.cyan.withOpacity(0.08),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AdyapanTheme.cyan.withOpacity(0.3)),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.security_rounded, color: AdyapanTheme.cyan, size: 20),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    'Silent Mode Active: Distractions are locked away silently to ensure 100% focused study. No interrupting popups!',
-                    style: AdyapanTheme.outfit(fontSize: 11, color: AdyapanTheme.cyan, fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 20),
-        ],
+        const SizedBox(height: 28),
 
-        // Notifications Blocker Simulation Section
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text('Blocked Distraction Stack', style: AdyapanTheme.fredoka(fontSize: 16, fontWeight: FontWeight.bold)),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(color: AdyapanTheme.cyan.withOpacity(0.1), borderRadius: BorderRadius.circular(50)),
-              child: Text(
-                '$_blockedNotifsCount BLOCKED',
-                style: AdyapanTheme.fredoka(fontSize: 11, color: AdyapanTheme.cyan, fontWeight: FontWeight.bold),
-              ),
-            ),
-          ],
+        // How it works
+        Container(
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: AdyapanTheme.bgLightDark,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('How Focus Shield works',
+                  style: AdyapanTheme.fredoka(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: AdyapanTheme.textMain)),
+              const SizedBox(height: 12),
+              _shieldInfoRow('1', Icons.play_circle_rounded,
+                  'Set your study duration and press Play', AdyapanTheme.pink),
+              _shieldInfoRow('2', Icons.notifications_off_rounded,
+                  'Phone goes into Do Not Disturb — NO notification from any app will appear',
+                  AdyapanTheme.cyan),
+              _shieldInfoRow('3', Icons.timer_rounded,
+                  'Study peacefully until the timer completes',
+                  AdyapanTheme.blueAccent),
+              _shieldInfoRow('4', Icons.notifications_active_rounded,
+                  'Timer done → notifications automatically unblocked + XP awarded',
+                  AdyapanTheme.green),
+            ],
+          ),
         ),
-        const SizedBox(height: 12),
-        if (!_shieldEngaged)
-          Center(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 40.0),
-              child: Text('Engage shield to visually trap notifications here!', style: AdyapanTheme.outfit(fontSize: 12, color: AdyapanTheme.textMuted)),
-            ),
-          )
-        else
-          Column(
-            children: _activeShieldNotifications.asMap().entries.map((entry) {
-              int idx = entry.key;
-              var notif = entry.value;
-              return Card(
-                color: Colors.white,
-                surfaceTintColor: Colors.transparent,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: BorderSide(color: AdyapanTheme.cyan.withOpacity(0.2))),
-                margin: const EdgeInsets.only(bottom: 10),
-                child: ListTile(
-                  dense: true,
-                  leading: CircleAvatar(
-                    backgroundColor: notif['app']!.contains('Instagram') 
-                      ? AdyapanTheme.pink.withOpacity(0.1) 
-                      : notif['app']!.contains('Snapchat') 
-                        ? Colors.yellow.withOpacity(0.2) 
-                        : AdyapanTheme.cyan.withOpacity(0.1),
-                    child: Text(
-                      notif['app']!.contains('Instagram') 
-                          ? '📸' 
-                          : notif['app']!.contains('Snapchat') 
-                              ? '👻' 
-                              : notif['app']!.contains('Mummy') 
-                                  ? '👩' 
-                                  : notif['app']!.contains('Papa') 
-                                      ? '🧔' 
-                                      : notif['app']!.contains('WhatsApp')
-                                          ? '🟢'
-                                          : '🎵',
-                      style: const TextStyle(fontSize: 18),
-                    ),
-                  ),
-                  title: Text(
-                    notif['app']!,
-                    style: AdyapanTheme.fredoka(fontSize: 12, color: AdyapanTheme.textMain, fontWeight: FontWeight.bold),
-                  ),
-                  subtitle: Text(
-                    notif['msg']!,
-                    style: AdyapanTheme.outfit(fontSize: 11, color: AdyapanTheme.textSub),
-                  ),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        notif['time']!,
-                        style: AdyapanTheme.outfit(fontSize: 9, color: AdyapanTheme.textMuted),
-                      ),
-                      const SizedBox(width: 8),
-                      const Icon(Icons.close_rounded, size: 16, color: AdyapanTheme.textMuted),
-                    ],
-                  ),
-                  onTap: () => _deflectNotification(idx),
-                ),
-              );
-            }).toList(),
-          )
       ],
+    );
+  }
+
+  Widget _shieldInfoRow(
+      String num, IconData icon, String text, Color color) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 26,
+            height: 26,
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.12),
+              shape: BoxShape.circle,
+            ),
+            alignment: Alignment.center,
+            child: Text(num,
+                style: AdyapanTheme.fredoka(
+                    fontSize: 12,
+                    color: color,
+                    fontWeight: FontWeight.bold)),
+          ),
+          const SizedBox(width: 10),
+          Icon(icon, size: 18, color: color),
+          const SizedBox(width: 8),
+          Expanded(
+              child: Text(text,
+                  style: AdyapanTheme.outfit(
+                      fontSize: 12,
+                      color: AdyapanTheme.textSub,
+                      height: 1.4))),
+        ],
+      ),
     );
   }
 
   void _showAddTaskDialog(BuildContext context, AppState state) {
-    final titleController = TextEditingController();
-    String selectedTag = 'Math';
-
+    final tc = TextEditingController();
+    String tag = 'Math';
     showDialog(
       context: context,
-      builder: (context) {
+      builder: (ctx) {
         return AlertDialog(
           backgroundColor: Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: Text('Add New Task', style: AdyapanTheme.fredoka(fontSize: 18, fontWeight: FontWeight.bold)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Text('Add Session Task',
+              style: AdyapanTheme.fredoka(
+                  fontSize: 18, fontWeight: FontWeight.bold)),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               TextField(
-                controller: titleController,
+                controller: tc,
                 decoration: InputDecoration(
-                  hintText: 'e.g., Learn Fraction rules',
-                  hintStyle: AdyapanTheme.outfit(fontSize: 14, color: AdyapanTheme.textMuted),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  hintText: 'e.g., Solve 10 algebra problems',
+                  hintStyle: AdyapanTheme.outfit(
+                      fontSize: 13, color: AdyapanTheme.textMuted),
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12)),
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 14),
               DropdownButtonFormField<String>(
-                value: selectedTag,
-                items: ['Math', 'Science', 'Focus', 'General'].map((tag) {
-                  return DropdownMenuItem(value: tag, child: Text(tag, style: AdyapanTheme.outfit(fontSize: 14)));
-                }).toList(),
-                onChanged: (val) {
-                  if (val != null) selectedTag = val;
-                },
+                value: tag,
                 decoration: InputDecoration(
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-              )
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12))),
+                items: ['Math', 'Science', 'English', 'Focus', 'General']
+                    .map((t) => DropdownMenuItem(
+                        value: t,
+                        child: Text(t,
+                            style: AdyapanTheme.outfit(fontSize: 13))))
+                    .toList(),
+                onChanged: (v) {
+                  if (v != null) tag = v;
+                },
+              ),
             ],
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text('Cancel', style: AdyapanTheme.fredoka(color: AdyapanTheme.textSub)),
+              onPressed: () => Navigator.pop(ctx),
+              child: Text('Cancel',
+                  style: AdyapanTheme.fredoka(color: AdyapanTheme.textSub)),
             ),
             ElevatedButton(
               onPressed: () {
-                if (titleController.text.isNotEmpty) {
-                  state.addTodo(titleController.text, selectedTag);
-                  Navigator.pop(context);
+                if (tc.text.isNotEmpty) {
+                  state.addTodo(tc.text, tag);
+                  Navigator.pop(ctx);
                 }
               },
-              style: ElevatedButton.styleFrom(backgroundColor: AdyapanTheme.blueAccent),
-              child: Text('Add Task', style: AdyapanTheme.fredoka(color: Colors.white)),
-            )
+              style: ElevatedButton.styleFrom(
+                  backgroundColor: AdyapanTheme.blueAccent,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10))),
+              child: Text('Add',
+                  style:
+                      AdyapanTheme.fredoka(color: Colors.white, fontSize: 14)),
+            ),
           ],
         );
       },
@@ -719,47 +1068,72 @@ class _FocusScreenState extends State<FocusScreen> with SingleTickerProviderStat
           children: [
             Column(
               children: [
-                // Header
-                Container(
-                  padding: const EdgeInsets.only(top: 20, left: 12, right: 20),
+                // ── Header ──
+                Padding(
+                  padding:
+                      const EdgeInsets.only(top: 20, left: 12, right: 20),
                   child: Row(
                     children: [
                       IconButton(
-                        icon: const Icon(Icons.menu_rounded, color: AdyapanTheme.textMain, size: 24),
-                        onPressed: () {
-                          Scaffold.of(context).openDrawer();
-                        },
+                        icon: const Icon(Icons.menu_rounded,
+                            color: AdyapanTheme.textMain, size: 24),
+                        onPressed: () => Scaffold.of(context).openDrawer(),
                       ),
                       const SizedBox(width: 4),
-                      Container(
+                      AnimatedContainer(
+                        duration: const Duration(milliseconds: 400),
                         padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(color: AdyapanTheme.pink.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
-                        child: const Icon(Icons.timer_10_rounded, color: AdyapanTheme.pink),
+                        decoration: BoxDecoration(
+                          color: _shieldActive
+                              ? AdyapanTheme.cyan.withOpacity(0.12)
+                              : AdyapanTheme.pink.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(
+                          _shieldActive
+                              ? Icons.shield_rounded
+                              : Icons.timer_10_rounded,
+                          color: _shieldActive
+                              ? AdyapanTheme.cyan
+                              : AdyapanTheme.pink,
+                        ),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('Study Focus Room', style: AdyapanTheme.fredoka(fontSize: 20, fontWeight: FontWeight.bold)),
-                            Text('Engage shield to sync and destroy distractions!', style: AdyapanTheme.outfit(fontSize: 12, color: AdyapanTheme.textSub)),
+                            Text('Study Focus Room',
+                                style: AdyapanTheme.fredoka(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.bold)),
+                            Text(
+                              _shieldActive
+                                  ? 'All notifications blocked — stay focused!'
+                                  : 'Start timer to block all distractions',
+                              style: AdyapanTheme.outfit(
+                                  fontSize: 11,
+                                  color: _shieldActive
+                                      ? AdyapanTheme.cyan
+                                      : AdyapanTheme.textSub),
+                            ),
                           ],
                         ),
-                      )
+                      ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 14),
 
-                // Focus Stats Dashboard
-                _buildFocusStatsCard(state),
-                const SizedBox(height: 10),
+                _buildStatsBar(state),
 
-                // Focus Tabs
-                Container(
+                // ── Tab bar ──
+                Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: TabBar(
                     controller: _tabController,
+                    isScrollable: true,
+                    tabAlignment: TabAlignment.start,
                     indicator: BoxDecoration(
                       gradient: AdyapanTheme.focusGradient,
                       borderRadius: BorderRadius.circular(50),
@@ -767,118 +1141,71 @@ class _FocusScreenState extends State<FocusScreen> with SingleTickerProviderStat
                     indicatorSize: TabBarIndicatorSize.tab,
                     labelColor: Colors.white,
                     unselectedLabelColor: AdyapanTheme.textSub,
-                    labelStyle: AdyapanTheme.fredoka(fontSize: 12, fontWeight: FontWeight.bold),
+                    labelStyle: AdyapanTheme.fredoka(
+                        fontSize: 12, fontWeight: FontWeight.bold),
                     dividerColor: Colors.transparent,
-                    tabs: const [
-                      Tab(text: 'Study Pomodoro'),
-                      Tab(text: 'Focus Shield'),
+                    tabs: [
+                      Tab(text: state.translate('Study Pomodoro')),
+                      Tab(
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(state.translate('Focus Shield'),
+                                style: AdyapanTheme.fredoka(fontSize: 12)),
+                            if (_dndGranted) ...[
+                              const SizedBox(width: 5),
+                              Container(
+                                width: 6,
+                                height: 6,
+                                decoration: BoxDecoration(
+                                  color: _shieldActive
+                                      ? AdyapanTheme.cyan
+                                      : AdyapanTheme.green,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                            ]
+                          ],
+                        ),
+                      ),
                     ],
                   ),
                 ),
 
-                // Content Views
                 Expanded(
                   child: TabBarView(
                     controller: _tabController,
                     children: [
-                      SingleChildScrollView(padding: const EdgeInsets.all(20), child: _buildStudyRoom(state)),
-                      SingleChildScrollView(padding: const EdgeInsets.all(20), child: _buildFocusSpaceHUD()),
+                      SingleChildScrollView(
+                          padding: const EdgeInsets.all(20),
+                          child: _buildPomodoroTab(state)),
+                      SingleChildScrollView(
+                          padding: const EdgeInsets.all(20),
+                          child: _buildShieldTab()),
                     ],
                   ),
-                )
+                ),
               ],
             ),
 
-            // Celebratory Confetti on completions!
+            // Confetti
             Align(
               alignment: Alignment.center,
               child: ConfettiWidget(
                 confettiController: _confettiController,
                 blastDirectionality: BlastDirectionality.explosive,
                 shouldLoop: false,
-                colors: const [AdyapanTheme.pink, AdyapanTheme.purple, AdyapanTheme.cyan, AdyapanTheme.green],
+                colors: const [
+                  AdyapanTheme.pink,
+                  AdyapanTheme.purple,
+                  AdyapanTheme.cyan,
+                  AdyapanTheme.green,
+                ],
               ),
-            )
+            ),
           ],
         ),
       ),
-    );
-  }
-}
-
-// Bouncing audio wave equalizer widget for premium ambient feel
-class EqualizerWave extends StatefulWidget {
-  final bool isPlaying;
-  const EqualizerWave({Key? key, required this.isPlaying}) : super(key: key);
-
-  @override
-  State<EqualizerWave> createState() => _EqualizerWaveState();
-}
-
-class _EqualizerWaveState extends State<EqualizerWave> with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  final List<double> _barHeights = [8, 22, 12, 28, 16, 20, 10, 24, 14, 18];
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1000),
-    );
-    if (widget.isPlaying) {
-      _controller.repeat(reverse: true);
-    }
-  }
-
-  @override
-  void didUpdateWidget(covariant EqualizerWave oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.isPlaying) {
-      if (!_controller.isAnimating) {
-        _controller.repeat(reverse: true);
-      }
-    } else {
-      _controller.stop();
-    }
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, child) {
-        return Row(
-          mainAxisSize: MainAxisSize.min,
-          children: List.generate(_barHeights.length, (index) {
-            double animVal = _controller.value;
-            double factor = (1.0 + (index % 3) * 0.2);
-            double currentHeight = widget.isPlaying 
-                ? (_barHeights[index] * (0.2 + 0.8 * (animVal * factor).clamp(0.0, 1.0)))
-                : 4.0;
-
-            return Container(
-              width: 3,
-              height: currentHeight,
-              margin: const EdgeInsets.symmetric(horizontal: 1.5),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [AdyapanTheme.pink, AdyapanTheme.cyan],
-                  begin: Alignment.bottomCenter,
-                  end: Alignment.topCenter,
-                ),
-                borderRadius: BorderRadius.circular(10),
-              ),
-            );
-          }),
-        );
-      },
     );
   }
 }

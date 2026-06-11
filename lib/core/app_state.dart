@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:async';
 import 'db_helper.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -8,7 +9,9 @@ class AppState extends ChangeNotifier {
   bool _initialized = false;
   bool get initialized => _initialized;
 
-  // Live Class Join Session persistence
+  Timer? _syncTimer;
+  bool _isSyncing = false;
+
   String? _liveClassJoinSubject;
   String? _liveClassJoinTime;
   String? _liveClassJoinClickTime;
@@ -119,11 +122,13 @@ class AppState extends ChangeNotifier {
   int _parentQuestXp = 150;
   bool _parentQuestCompleted = false;
   double _screenLimit = 60.0; // minutes allowed
+  // Note: _parentPin, _deviceFrozen, and their getters are defined in the Focus Shield section below.
 
   String get parentQuest => _parentQuest;
   int get parentQuestXp => _parentQuestXp;
   bool get parentQuestCompleted => _parentQuestCompleted;
   double get screenLimit => _screenLimit;
+
 
   // 5b. Auth Database & Session
   bool _isLoggedIn = false;
@@ -165,8 +170,14 @@ class AppState extends ChangeNotifier {
   List<Map<String, dynamic>> _teacherFeedbacks = [];
   List<Map<String, dynamic>> get teacherFeedbacks => _teacherFeedbacks;
 
-  int _studentRank = 4;
-  int get studentRank => _studentRank;
+  List<Map<String, dynamic>> _leaderboard = [];
+  List<Map<String, dynamic>> get leaderboard => _leaderboard;
+
+  int get studentRank {
+    final idx = _leaderboard.indexWhere((entry) => (entry['name'] as String? ?? '').toLowerCase().trim() == _studentName.toLowerCase().trim());
+    if (idx != -1) return idx + 1;
+    return 4;
+  }
 
   // 6. Attendance Logs
   List<Map<String, dynamic>> _attendanceLogs = [];
@@ -218,6 +229,10 @@ class AppState extends ChangeNotifier {
     _prefs.setInt('completed_quizzes_count', _completedQuizzesCount);
     addXp(25); // ✅ Only games give XP!
     notifyListeners();
+
+    if (_studentEmail.isNotEmpty && _userRole == 'student') {
+      DbHelper.updateGamifiedStats(_studentEmail, completedQuizzes: _completedQuizzesCount);
+    }
   }
 
 
@@ -480,6 +495,7 @@ class AppState extends ChangeNotifier {
 
     _parentPin = _prefs.getString('parent_pin') ?? '1234';
     _deviceFrozen = _prefs.getBool('device_frozen') ?? false;
+    _selectedLanguage = _prefs.getString('selected_language') ?? 'en';
 
     await _resolveTeacherIdAndSync();
 
@@ -502,6 +518,7 @@ class AppState extends ChangeNotifier {
         fetchLinkedStudents();
         syncTeacherSubmissionsFromDb();
       }
+      startSyncTimer();
     }
   }
 
@@ -517,6 +534,10 @@ class AppState extends ChangeNotifier {
     _prefs.setInt('xp', _xp);
     _prefs.setInt('level', _level);
     notifyListeners();
+
+    if (_studentEmail.isNotEmpty && _userRole == 'student') {
+      DbHelper.updateGamifiedStats(_studentEmail, xp: _xp, level: _level);
+    }
   }
 
   // Todo operations
@@ -645,6 +666,7 @@ class AppState extends ChangeNotifier {
   void logout() {
     _isLoggedIn = false;
     _prefs.setBool('is_logged_in', false);
+    stopSyncTimer();
     notifyListeners();
   }
 
@@ -666,6 +688,17 @@ class AppState extends ChangeNotifier {
       _userRole = user['role'] ?? 'student';
       _teacherId = user['teacher_id'] ?? '';
       _userId = user['id'] ?? '';
+      
+      // Map gamified stats
+      _xp = user['xp'] != null ? int.tryParse(user['xp'].toString()) ?? _xp : _xp;
+      _level = user['level'] != null ? int.tryParse(user['level'].toString()) ?? _level : _level;
+      _streak = user['streak'] != null ? int.tryParse(user['streak'].toString()) ?? _streak : _streak;
+      _completedQuizzesCount = user['completedQuizzes'] != null ? int.tryParse(user['completedQuizzes'].toString()) ?? _completedQuizzesCount : _completedQuizzesCount;
+
+      _prefs.setInt('xp', _xp);
+      _prefs.setInt('level', _level);
+      _prefs.setInt('streak', _streak);
+      _prefs.setInt('completed_quizzes_count', _completedQuizzesCount);
       
       _prefs.setString('student_name', _studentName);
       _prefs.setString('student_email', _studentEmail);
@@ -696,6 +729,7 @@ class AppState extends ChangeNotifier {
       await syncHomeworkAndNotesFromDb();
       await syncSyllabusAndGamesFromDb();
       
+      startSyncTimer();
       notifyListeners();
       return true;
     } catch (e) {
@@ -865,6 +899,11 @@ class AppState extends ChangeNotifier {
     String? fileName,
     String? filePath,
   }) async {
+    String? uploadedUrl;
+    if (filePath != null && filePath.isNotEmpty && !filePath.startsWith('http')) {
+      uploadedUrl = await DbHelper.uploadFile(filePath);
+    }
+
     final newId = _homeworkList.isEmpty
         ? 1
         : (_homeworkList.map((h) => h['id'] as int).reduce((a, b) => a > b ? a : b) + 1);
@@ -878,8 +917,11 @@ class AppState extends ChangeNotifier {
       'submitted': false,
       'submittedAt': null,
       'addedBy': addedBy,
-      'fileName': fileName,
-      'filePath': filePath,
+      'fileName': '',
+      'filePath': '',
+      'teacherFileName': fileName,
+      'teacherFilePath': filePath,
+      'teacherFileUrl': uploadedUrl ?? '',
     });
     _saveHomework();
     notifyListeners();
@@ -894,6 +936,9 @@ class AppState extends ChangeNotifier {
         addedBy: addedBy,
         teacherId: _teacherId.isNotEmpty ? _teacherId : 'teacher_mps8yshu_48f5p2',
         classLevel: _studentClass,
+        fileName: fileName,
+        filePath: filePath,
+        fileUrl: uploadedUrl ?? '',
       );
       if (dbId > 0) {
         _homeworkList[0]['id'] = dbId;
@@ -914,6 +959,12 @@ class AppState extends ChangeNotifier {
   }) async {
     final index = _homeworkList.indexWhere((h) => h['id'] == id);
     if (index == -1 || _homeworkList[index]['submitted'] == true) return false;
+    
+    String? finalPath = filePath;
+    if (filePath != null && filePath.isNotEmpty && !filePath.startsWith('http')) {
+      finalPath = await DbHelper.uploadFile(filePath);
+    }
+
     final now = DateTime.now();
     final hour = now.hour > 12 ? now.hour - 12 : (now.hour == 0 ? 12 : now.hour);
     final ampm = now.hour >= 12 ? 'PM' : 'AM';
@@ -923,7 +974,7 @@ class AppState extends ChangeNotifier {
     _homeworkList[index]['submitted'] = true;
     _homeworkList[index]['submittedAt'] = submittedAt;
     _homeworkList[index]['fileName'] = fileName;
-    _homeworkList[index]['filePath'] = filePath;
+    _homeworkList[index]['filePath'] = finalPath;
     _homeworkList[index]['studentComment'] = studentComment;
     _saveHomework();
     notifyListeners();
@@ -935,7 +986,7 @@ class AppState extends ChangeNotifier {
         studentName: _studentName,
         submittedAt: submittedAt,
         fileName: fileName,
-        filePath: filePath,
+        filePath: finalPath,
         studentComment: studentComment,
       );
       print('✅ Homework $id submission synced successfully to cloud database!');
@@ -974,6 +1025,14 @@ class AppState extends ChangeNotifier {
     required String uploadedBy,
     String filePath = '',
   }) async {
+    String finalPath = filePath;
+    if (filePath.isNotEmpty && !filePath.startsWith('http')) {
+      final url = await DbHelper.uploadFile(filePath);
+      if (url != null) {
+        finalPath = url;
+      }
+    }
+
     final newId = _notesList.isEmpty
         ? 1
         : (_notesList.map((n) => n['id'] as int).reduce((a, b) => a > b ? a : b) + 1);
@@ -988,7 +1047,7 @@ class AppState extends ChangeNotifier {
       'uploadedBy': uploadedBy,
       'uploadedAt': 'Just now',
       'type': 'PDF',
-      'filePath': filePath,
+      'filePath': finalPath,
     });
     _saveNotes();
     notifyListeners();
@@ -1003,6 +1062,7 @@ class AppState extends ChangeNotifier {
         pages: pages,
         uploadedBy: uploadedBy,
         teacherId: _teacherId.isNotEmpty ? _teacherId : 'teacher_mps8yshu_48f5p2',
+        filePath: finalPath,
       );
       if (dbId > 0) {
         _notesList[0]['id'] = dbId;
@@ -1110,7 +1170,306 @@ class AppState extends ChangeNotifier {
         '📱 Device unlocked. Focus Shield deactivated.': '📱 डिवाइस अनलॉक हो गया। फोकस शील्ड निष्क्रिय हो गई।',
         'Parent Verification': 'अभिभावक सत्यापन',
         'Enter your 4-digit PIN to bypass focus lock': 'फ़ोकस लॉक को बायपास करने के लिए अपना 4-अंकीय पिन दर्ज करें',
-      }
+        
+        // General Greetings
+        'Good morning,': 'सुप्रभात,',
+        'Good afternoon,': 'नमस्कार,',
+        'Good evening,': 'शुभ संध्या,',
+        'Happy late night study,': 'देर रात की पढ़ाई मुबारक,',
+
+        // Quick Access Cards
+        'Attendance': 'उपस्थिति',
+        'Homework': 'गृहकार्य',
+        'Today\'s Live Class': 'आज की लाइव क्लास',
+        'Notes & PDFs': 'नोट्स और पीडीएफ़',
+        'Recorded Classes': 'रिकॉर्डेड क्लासेस',
+        'Doubt Sessions': 'शंका समाधान सत्र',
+        'Quick access': 'त्वरित पहुँच',
+        'See all': 'सभी देखें',
+        'See All': 'सभी देखें',
+        'View All': 'सभी देखें',
+        'LESSONS': 'पाठ',
+        'QUESTS': 'खोज',
+        'RANK': 'रैंक',
+
+        // My Progress & Leaderboard
+        'My Progress': 'मेरी प्रगति',
+        'Overall Academic Progress': 'समग्र शैक्षणिक प्रगति',
+        'Attendance • Homework • Quizzes': 'उपस्थिति • गृहकार्य • क्विज़',
+        'Leaderboard': 'लीडरबोर्ड',
+        'Full Board': 'पूरा बोर्ड',
+        'Search subjects, topics, teachers...': 'विषय, विषय-वस्तु, शिक्षक खोजें...',
+
+        // Future Skills Hub
+        'Future Skills Hub': 'भविष्य कौशल हब',
+        'Learn premium 21st-century superpower skills customized for your school portfolio!': 'अपने स्कूल पोर्टफोलियो के लिए अनुकूलित प्रीमियम 21वीं सदी की महाशक्ति कौशल सीखें!',
+
+        // Parent Portal Page
+        'Parent Portal Gatekeeper': 'अभिभावक पोर्टल द्वारपाल',
+        'Please enter your 4-digit PIN to access parent analytics, limit sliders, and quest creators.': 'अभिभावक विश्लेषण, सीमा स्लाइडर्स और खोज निर्माताओं तक पहुँचने के लिए कृपया अपना 4-अंकीय पिन दर्ज करें।',
+        'Unlock Portal': 'पोर्टल अनलॉक करें',
+        '(Demo Bypass PIN: 1234)': '(डेमो बाईपास पिन: 1234)',
+        'Welcome, Parent!': 'स्वागत है, अभिभावक!',
+        'Configure study lock metrics, real-life rewards, and remote locks.': 'अध्ययन लॉक मेट्रिक्स, वास्तविक जीवन के पुरस्कार और रिमोट लॉक कॉन्फ़िगर करें।',
+        'Freeze Child Device': 'बच्चे का उपकरण फ्रीज करें',
+        'Remote Device Frozen': 'रिमोट डिवाइस फ्रोजन है',
+        'Broadcast lock is active.': 'ब्रॉडकास्ट लॉक सक्रिय है।',
+        'Instantly freeze all study & game rooms.': 'सभी अध्ययन और खेल कक्षों को तुरंत फ्रीज करें।',
+        '🛑 Device instantly locked! Aarav\'s app is frozen.': '🛑 डिवाइस तुरंत लॉक हो गया! आरव का ऐप फ्रीज है।',
+        '📱 Device unlocked. Study rooms are active.': '📱 डिवाइस अनलॉक हो गया। अध्ययन कक्ष सक्रिय हैं।',
+        'Active Study Metrics & Streaks': 'सक्रिय अध्ययन मेट्रिक्स और स्ट्रीक्स',
+        'Study Ratio': 'अध्ययन अनुपात',
+        '78% Efficiency': '78% दक्षता',
+        'Daily Screen Limit': 'दैनिक स्क्रीन सीमा',
+        'Subject Focus Distribution': 'विषय फोकस वितरण',
+        'Mathematics & BODMAS': 'गणित और बॉडमास',
+        'Science & Orbitals': 'विज्ञान और ऑर्बिटल्स',
+        'English & Voices': 'अंग्रेजी और वॉयस',
+        'Assign Custom Special Quest': 'कस्टम विशेष खोज असाइन करें',
+        'e.g., Complete Atomic Shell Game...': 'जैसे, परमाणु शेल गेम पूरा करें...',
+        'Select XP Reward:': 'एक्सपी (XP) इनाम चुनें:',
+        'Assign Quest to Child': 'बच्चे को खोज असाइन करें',
+        '🎉 Quest successfully synced to Child\'s Dashboard!': '🎉 खोज बच्चे के डैशबोर्ड पर सफलतापूर्वक सिंक हो गई!',
+        'Manage Play Limits': 'खेलने की सीमाएं प्रबंधित करें',
+        'Max Daily Screen Time:': 'अधिकतम दैनिक स्क्रीन समय:',
+        'Once this limit is hit, Focus Mode engaged screens will freeze until verified by parents.': 'एक बार यह सीमा पूरी हो जाने पर, फोकस मोड वाली स्क्रीन माता-पिता द्वारा सत्यापित होने तक फ्रीज रहेंगी।',
+        'Educator Alerts & Parent Feedback 🔔': 'शिक्षक अलर्ट और अभिभावक फीडबैक 🔔',
+        'No recent alerts from school teachers.': 'स्कूल के शिक्षकों से कोई हालिया अलर्ट नहीं है।',
+        'Meeting Request': 'बैठक का अनुरोध',
+        'Syllabus Alert': 'पाठ्यक्रम अलर्ट',
+        'Notice': 'सूचना',
+        'Accept': 'स्वीकार करें',
+        'Decline': 'अस्वीकार करें',
+        '✅ Meeting request accepted! Teacher notified.': '✅ बैठक का अनुरोध स्वीकार कर लिया गया! शिक्षक को सूचित कर दिया गया है।',
+        '❌ Meeting request declined. Teacher notified.': '❌ बैठक का अनुरोध अस्वीकार कर दिया गया। शिक्षक को सूचित कर दिया गया है।',
+        'Confirmed ✓ (Teacher notified)': 'पुष्टि की गई ✓ (शिक्षक को सूचित किया गया)',
+        'Declined ✗ (Teacher notified)': 'अस्वीकार किया गया ✗ (शिक्षक को सूचित किया गया)',
+        'Real-Life Milestones & Shop 🎁': 'वास्तविक जीवन के मील के पत्थर और दुकान 🎁',
+        'Ready to Claim': 'दावा करने के लिए तैयार',
+        'Claimed': 'दावा किया गया',
+        'Locked': 'लॉक किया गया',
+        '1 Hour PlayStation Time 🎮': '1 घंटा प्लेस्टेशन समय 🎮',
+        'Reach Level 3 & Complete homework': 'स्तर 3 पर पहुंचें और होमवर्क पूरा करें',
+        'Pizza Sunday Feast 🍕': 'पिज्जा संडे दावत 🍕',
+        'Complete 5 Math Quizzes in Quiz Arena': 'क्विज़ एरिना में 5 गणित क्विज़ पूरे करें',
+        'New Comic Books Set 📚': 'नया कॉमिक बुक्स सेट 📚',
+        'Reach Focus Zen Master Rank': 'फोकस जेन मास्टर रैंक तक पहुंचें',
+        'Complete Study Milestones': 'अध्ययन के मील के पत्थर पूरे करें',
+        '300 XP': '300 एक्सपी',
+        '500 XP': '500 एक्सपी',
+        '800 XP': '800 एक्सपी',
+        'Add Real-Life Reward 🎁': 'वास्तविक जीवन का इनाम जोड़ें 🎁',
+        'Reward Name (e.g., Pizza, Xbox Time)': 'इनाम का नाम (जैसे, पिज्जा, एक्सबॉक्स समय)',
+        'Requirement (e.g., Reach Level 5)': 'आवश्यकता (जैसे, स्तर 5 पर पहुंचें)',
+        'XP Threshold (e.g., 400 XP)': 'एक्सपी (XP) सीमा (जैसे, 400 एक्सपी)',
+        '🎉 New Reward Milestone added!': '🎉 नया इनाम मील का पत्थर जोड़ा गया!',
+        '❌ Invalid PIN! (Hint: Try 1234 or 0000)': '❌ अमान्य पिन! (संकेत: 1234 या 0000 आज़माएं)',
+        // New parent screen tabs & sections
+        'Overview': 'अवलोकन',
+        'Messages': 'संदेश',
+        'Reports': 'रिपोर्ट',
+        'Teacher Messages': 'शिक्षक संदेश',
+        'Messages & alerts sent by school teachers': 'स्कूल के शिक्षकों द्वारा भेजे गए संदेश और अलर्ट',
+        'Teacher messages will appear here when sent.': 'शिक्षक संदेश भेजने पर यहाँ दिखाई देंगे।',
+        'Academic Report Card': 'शैक्षणिक रिपोर्ट कार्ड',
+        'Real-time summary of your child\'s performance': 'आपके बच्चे के प्रदर्शन का रीयल-टाइम सारांश',
+        'Overall Performance': 'समग्र प्रदर्शन',
+        'Syllabus Completion Rate': 'पाठ्यक्रम पूर्णता दर',
+        'Subject-wise Progress': 'विषयवार प्रगति',
+        'Recent Homework': 'हाल का गृहकार्य',
+        'Upcoming Live Classes': 'आगामी लाइव कक्षाएं',
+        'No homework assigned yet.': 'अभी तक कोई गृहकार्य नहीं दिया गया।',
+        'No live classes scheduled.': 'कोई लाइव कक्षा निर्धारित नहीं है।',
+        'Done': 'पूर्ण',
+        'Pending': 'बकाया',
+        'Present': 'उपस्थित',
+        'Days': 'दिन',
+        'Quizzes': 'क्विज़',
+        'Earned': 'अर्जित',
+        'Keep it up!': 'जारी रखें!',
+        'Due': 'देय',
+        'Streak': 'स्ट्रीक',
+        'Quiz Score': 'क्विज़ स्कोर',
+        'Study Streak': 'अध्ययन स्ट्रीक',
+        'Mathematics': 'गणित',
+        'Science': 'विज्ञान',
+        'English': 'अंग्रेजी',
+        'Monitor & manage your child\'s learning': 'अपने बच्चे की शिक्षा की निगरानी और प्रबंधन करें',
+        'Data refreshed!': 'डेटा अपडेट हो गया!',
+        'Live Class Starting!': 'लाइव क्लास शुरू हो रही है!',
+        'Class': 'कक्षा',
+        'Your child\'s class is about to begin. Please ensure they are ready!': 'आपके बच्चे की कक्षा शुरू होने वाली है। कृपया सुनिश्चित करें कि वे तैयार हैं!',
+        '🛑 Device instantly locked! App is frozen.': '🛑 डिवाइस तुरंत लॉक हो गया! ऐप फ्रीज है।',
+      },
+
+      // ── తెలుగు అనువాదాలు (Telugu Translations) ──
+      'te': {
+        // Login & Auth
+        'Student': 'విద్యార్థి',
+        'Teacher': 'ఉపాధ్యాయుడు',
+        'Forgot Password?': 'పాస్‌వర్డ్ మర్చిపోయారా?',
+        'Log In': 'లాగిన్ చేయండి',
+        'Cancel': 'రద్దు చేయి',
+        'Exit': 'నిష్క్రమించు',
+
+        // Navigation & Drawer
+        'Home': 'హోమ్',
+        'Syllabus': 'పాఠ్యక్రమం',
+        'Roadmap': 'రోడ్‌మ్యాప్',
+        'Gamified': 'గేమ్‌లు',
+        'Exit Adyapan?': 'అధ్యాపన్ నుండి నిష్క్రమించాలా?',
+        'Are you sure you want to exit Adyapan?': 'మీరు నిజంగా అధ్యాపన్ నుండి నిష్క్రమించాలా?',
+        'Select Language': 'భాష ఎంచుకోండి',
+        'Select App Language': 'యాప్ భాష ఎంచుకోండి',
+        'Language': 'భాష',
+        'Understood, thanks!': 'అర్థమైంది, ధన్యవాదాలు!',
+        'Student Dashboard': 'విద్యార్థి డ్యాష్‌బోర్డ్',
+        'Parent Portal Gate': 'తల్లిదండ్రుల పోర్టల్',
+        'Focus Shield Settings': 'ఫోకస్ షీల్డ్',
+        'Teacher Feedback Hub': 'ఉపాధ్యాయుల అభిప్రాయం',
+        'Help & FAQ': 'సహాయం మరియు FAQ',
+        'Switch Profile / Logout': 'ప్రొఫైల్ మార్చు / లాగ్అవుట్',
+        'Help & Navigation Guide': 'నావిగేషన్ గైడ్',
+        'Find answers and navigate Adyapan easily': 'సమాధానాలు కనుగొనండి మరియు అధ్యాపన్‌ను సులభంగా నావిగేట్ చేయండి',
+        'Parent Unlock': 'తల్లిదండ్రి అన్‌లాక్',
+        'Parent Verification': 'తల్లిదండ్రి వెరిఫికేషన్',
+        'Enter your 4-digit PIN to bypass focus lock': 'ఫోకస్ లాక్ దాటడానికి 4-అంకెల పిన్ నమోదు చేయండి',
+        '📱 Device unlocked. Focus Shield deactivated.': '📱 డివైస్ అన్‌లాక్ అయింది. ఫోకస్ షీల్డ్ నిష్క్రియం అయింది.',
+
+        // Greetings
+        'Good morning,': 'శుభోదయం,',
+        'Good afternoon,': 'శుభ మధ్యాహ్నం,',
+        'Good evening,': 'శుభ సాయంత్రం,',
+        'Happy late night study,': 'రాత్రి చదువుకు శుభాకాంక్షలు,',
+
+        // Dashboard Quick Access Cards
+        'Attendance': 'హాజరు',
+        'Homework': 'హోమ్‌వర్క్',
+        'Today\'s Live Class': 'నేటి లైవ్ క్లాస్',
+        'Notes & PDFs': 'నోట్స్ మరియు పిడిఎఫ్‌లు',
+        'Recorded Classes': 'రికార్డ్ చేసిన తరగతులు',
+        'Doubt Sessions': 'సందేహ నివారణ సెషన్లు',
+        'Quick access': 'శీఘ్ర యాక్సెస్',
+        'See all': 'అన్నీ చూడు',
+        'See All': 'అన్నీ చూడు',
+        'View All': 'అన్నీ చూడు',
+        'LESSONS': 'పాఠాలు',
+        'QUESTS': 'క్వెస్ట్‌లు',
+        'RANK': 'ర్యాంక్',
+
+        // Progress & Leaderboard
+        'My Progress': 'నా పురోగతి',
+        'Overall Academic Progress': 'మొత్తం విద్యా పురోగతి',
+        'Attendance • Homework • Quizzes': 'హాజరు • హోమ్‌వర్క్ • క్విజ్‌లు',
+        'Leaderboard': 'లీడర్‌బోర్డ్',
+        'Full Board': 'పూర్తి బోర్డ్',
+        'Search subjects, topics, teachers...': 'విషయాలు, అంశాలు, ఉపాధ్యాయులు వెతకండి...',
+
+        // Future Skills
+        'Future Skills Hub': 'భవిష్యత్ నైపుణ్యాల కేంద్రం',
+        'Learn premium 21st-century superpower skills customized for your school portfolio!': 'మీ పాఠశాల పోర్ట్‌ఫోలియో కోసం అనుకూలీకరించిన 21వ శతాబ్దపు నైపుణ్యాలు నేర్చుకోండి!',
+
+        // Stats
+        'Study Ratio': 'అధ్యయన నిష్పత్తి',
+        '78% Efficiency': '78% సామర్థ్యం',
+        'Daily Screen Limit': 'రోజువారీ స్క్రీన్ పరిమితి',
+        'Mins': 'నిమిషాలు',
+        'Days': 'రోజులు',
+        'Streak': 'స్ట్రీక్',
+        'Done': 'పూర్తయింది',
+        'Pending': 'పెండింగ్',
+        'Present': 'హాజరు',
+        'Quizzes': 'క్విజ్‌లు',
+        'Earned': 'సంపాదించారు',
+        'Keep it up!': 'ముందుకు సాగండి!',
+        'Due': 'గడువు',
+        'Quiz Score': 'క్విజ్ స్కోర్',
+        'Study Streak': 'అధ్యయన స్ట్రీక్',
+        'Mathematics': 'గణితం',
+        'Science': 'సైన్స్',
+        'English': 'ఆంగ్లం',
+
+        // ── Parent Portal ──
+        'Parent Portal Gatekeeper': 'తల్లిదండ్రుల పోర్టల్ గేట్‌కీపర్',
+        'Please enter your 4-digit PIN to access parent analytics, limit sliders, and quest creators.': 'తల్లిదండ్రుల విశ్లేషణలు, పరిమితి స్లైడర్లు మరియు క్వెస్ట్ క్రియేటర్లను యాక్సెస్ చేయడానికి మీ 4-అంకెల పిన్ నమోదు చేయండి.',
+        'Unlock Portal': 'పోర్టల్ అన్‌లాక్ చేయండి',
+        '(Demo Bypass PIN: 1234)': '(డెమో పిన్: 1234)',
+        'Welcome, Parent!': 'స్వాగతం, తల్లిదండ్రీ!',
+        'Configure study lock metrics, real-life rewards, and remote locks.': 'అధ్యయన లాక్ మెట్రిక్స్, నిజ జీవిత బహుమతులు మరియు రిమోట్ లాక్‌లు కాన్ఫిగర్ చేయండి.',
+        'Freeze Child Device': 'పిల్లవాడి పరికరాన్ని ఫ్రీజ్ చేయండి',
+        'Remote Device Frozen': 'రిమోట్ పరికరం ఫ్రీజ్ అయింది',
+        'Broadcast lock is active.': 'బ్రాడ్‌కాస్ట్ లాక్ సక్రియంగా ఉంది.',
+        'Instantly freeze all study & game rooms.': 'అన్ని అధ్యయన మరియు గేమ్ గదులను వెంటనే ఫ్రీజ్ చేయండి.',
+        '🛑 Device instantly locked! App is frozen.': '🛑 పరికరం వెంటనే లాక్ అయింది! యాప్ ఫ్రీజ్ అయింది.',
+        '📱 Device unlocked. Study rooms are active.': '📱 పరికరం అన్‌లాక్ అయింది. అధ్యయన గదులు సక్రియంగా ఉన్నాయి.',
+        'Active Study Metrics & Streaks': 'సక్రియ అధ్యయన మెట్రిక్స్ మరియు స్ట్రీక్‌లు',
+        'Subject Focus Distribution': 'విషయ ఫోకస్ పంపిణీ',
+        'Mathematics & BODMAS': 'గణితం మరియు BODMAS',
+        'Science & Orbitals': 'సైన్స్ మరియు ఆర్బిటల్స్',
+        'English & Voices': 'ఆంగ్లం మరియు వాయిస్‌లు',
+        'Assign Custom Special Quest': 'కస్టమ్ ప్రత్యేక క్వెస్ట్ అసైన్ చేయండి',
+        'e.g., Complete Atomic Shell Game...': 'ఉదా., అటామిక్ షెల్ గేమ్ పూర్తి చేయండి...',
+        'Select XP Reward:': 'XP బహుమతి ఎంచుకోండి:',
+        'Assign Quest to Child': 'పిల్లవాడికి క్వెస్ట్ అసైన్ చేయండి',
+        '🎉 Quest successfully synced to Child\'s Dashboard!': '🎉 క్వెస్ట్ విజయవంతంగా పిల్లవాడి డ్యాష్‌బోర్డ్‌కు సమకాలీకరించబడింది!',
+        'Manage Play Limits': 'ఆట పరిమితులు నిర్వహించండి',
+        'Max Daily Screen Time:': 'గరిష్ట రోజువారీ స్క్రీన్ సమయం:',
+        'Once this limit is hit, Focus Mode engaged screens will freeze until verified by parents.': 'ఈ పరిమితి చేరిన తర్వాత, ఫోకస్ మోడ్ స్క్రీన్‌లు తల్లిదండ్రులు వెరిఫై చేసే వరకు ఫ్రీజ్ అవుతాయి.',
+        'Educator Alerts & Parent Feedback 🔔': 'ఉపాధ్యాయుల అలర్ట్‌లు మరియు తల్లిదండ్రుల అభిప్రాయం 🔔',
+        'No recent alerts from school teachers.': 'పాఠశాల ఉపాధ్యాయుల నుండి ఇటీవలి అలర్ట్‌లు లేవు.',
+        'Meeting Request': 'సమావేశ అభ్యర్థన',
+        'Syllabus Alert': 'పాఠ్యక్రమ అలర్ట్',
+        'Notice': 'నోటీసు',
+        'Accept': 'అంగీకరించు',
+        'Decline': 'తిరస్కరించు',
+        '✅ Meeting request accepted! Teacher notified.': '✅ సమావేశ అభ్యర్థన అంగీకరించబడింది! ఉపాధ్యాయుడికి తెలియజేయబడింది.',
+        '❌ Meeting request declined. Teacher notified.': '❌ సమావేశ అభ్యర్థన తిరస్కరించబడింది. ఉపాధ్యాయుడికి తెలియజేయబడింది.',
+        'Confirmed ✓ (Teacher notified)': 'నిర్ధారించబడింది ✓ (ఉపాధ్యాయుడికి తెలియజేయబడింది)',
+        'Declined ✗ (Teacher notified)': 'తిరస్కరించబడింది ✗ (ఉపాధ్యాయుడికి తెలియజేయబడింది)',
+        'Real-Life Milestones & Shop 🎁': 'నిజ జీవిత మైలురాళ్ళు మరియు షాప్ 🎁',
+        'Ready to Claim': 'క్లెయిమ్ చేయడానికి సిద్ధం',
+        'Claimed': 'క్లెయిమ్ చేయబడింది',
+        'Locked': 'లాక్ చేయబడింది',
+        '1 Hour PlayStation Time 🎮': '1 గంట ప్లేస్టేషన్ సమయం 🎮',
+        'Reach Level 3 & Complete homework': 'స్థాయి 3కి చేరుకొని హోమ్‌వర్క్ పూర్తి చేయండి',
+        'Pizza Sunday Feast 🍕': 'పిజ్జా ఆదివారం విందు 🍕',
+        'Complete 5 Math Quizzes in Quiz Arena': 'క్విజ్ అరేనాలో 5 గణిత క్విజ్‌లు పూర్తి చేయండి',
+        'New Comic Books Set 📚': 'కొత్త కామిక్ బుక్స్ సెట్ 📚',
+        'Reach Focus Zen Master Rank': 'ఫోకస్ జెన్ మాస్టర్ ర్యాంక్‌కు చేరుకోండి',
+        'Complete Study Milestones': 'అధ్యయన మైలురాళ్ళు పూర్తి చేయండి',
+        '300 XP': '300 XP',
+        '500 XP': '500 XP',
+        '800 XP': '800 XP',
+        'Add Real-Life Reward 🎁': 'నిజ జీవిత బహుమతి జోడించండి 🎁',
+        'Reward Name (e.g., Pizza, Xbox Time)': 'బహుమతి పేరు (ఉదా., పిజ్జా, Xbox సమయం)',
+        'Requirement (e.g., Reach Level 5)': 'అవసరం (ఉదా., స్థాయి 5కి చేరుకోండి)',
+        'XP Threshold (e.g., 400 XP)': 'XP పరిమితి (ఉదా., 400 XP)',
+        '🎉 New Reward Milestone added!': '🎉 కొత్త బహుమతి మైలురాయి జోడించబడింది!',
+        '❌ Invalid PIN! (Hint: Try 1234 or 0000)': '❌ చెల్లని పిన్! (సూచన: 1234 లేదా 0000 ప్రయత్నించండి)',
+
+        'Overview': 'అవలోకనం',
+        'Messages': 'సందేశాలు',
+        'Reports': 'నివేదికలు',
+        'Teacher Messages': 'ఉపాధ్యాయుల సందేశాలు',
+        'Messages & alerts sent by school teachers': 'పాఠశాల ఉపాధ్యాయులు పంపిన సందేశాలు మరియు అలర్ట్‌లు',
+        'Teacher messages will appear here when sent.': 'ఉపాధ్యాయుల సందేశాలు పంపినప్పుడు ఇక్కడ కనిపిస్తాయి.',
+        'Academic Report Card': 'విద్యా రిపోర్ట్ కార్డ్',
+        'Real-time summary of your child\'s performance': 'మీ పిల్లవాడి పనితీరు యొక్క రియల్-టైమ్ సారాంశం',
+        'Overall Performance': 'మొత్తం పనితీరు',
+        'Syllabus Completion Rate': 'పాఠ్యక్రమ పూర్తి రేటు',
+        'Subject-wise Progress': 'విషయ వారీ పురోగతి',
+        'Recent Homework': 'ఇటీవలి హోమ్‌వర్క్',
+        'Upcoming Live Classes': 'రాబోయే లైవ్ తరగతులు',
+        'No homework assigned yet.': 'ఇంకా హోమ్‌వర్క్ ఏదీ ఇవ్వలేదు.',
+        'No live classes scheduled.': 'లైవ్ తరగతులు ఏవీ షెడ్యూల్ కాలేదు.',
+        'Monitor & manage your child\'s learning': 'మీ పిల్లవాడి అధ్యయనాన్ని పర్యవేక్షించండి మరియు నిర్వహించండి',
+        'Data refreshed!': 'డేటా రిఫ్రెష్ అయింది!',
+        'Live Class Starting!': 'లైవ్ క్లాస్ ప్రారంభమవుతోంది!',
+        'Class': 'తరగతి',
+        'Your child\'s class is about to begin. Please ensure they are ready!': 'మీ పిల్లవాడి తరగతి ప్రారంభమవ్వబోతోంది. దయచేసి వారు సిద్ధంగా ఉన్నారని నిర్ధారించుకోండి!',
+        '🛑 Device instantly locked! App is frozen.': '🛑 పరికరం వెంటనే లాక్ అయింది! యాప్ ఫ్రీజ్ అయింది.',
+        'Add Reward': 'బహుమతి జోడించు',
+      },
     };
     return map[_selectedLanguage]?[text] ?? text;
   }
@@ -1130,7 +1489,7 @@ class AppState extends ChangeNotifier {
     try {
       final conn = await DbHelper.getConnection();
       final results = await conn.execute(
-        'SELECT name, phone, class_name, class_level, school, school_name FROM users WHERE LOWER(email) = :email;',
+        'SELECT name, phone, class_name, class_level, school, school_name, xp, level, streak, completed_quizzes FROM users WHERE LOWER(email) = :email;',
         {'email': email.toLowerCase().trim()},
       );
       if (results.rows.isNotEmpty) {
@@ -1140,10 +1499,19 @@ class AppState extends ChangeNotifier {
         _studentClass = row['class_name'] ?? row['class_level'] ?? _studentClass;
         _studentSchool = row['school'] ?? row['school_name'] ?? _studentSchool;
 
+        _xp = row['xp'] != null ? int.tryParse(row['xp'].toString()) ?? _xp : _xp;
+        _level = row['level'] != null ? int.tryParse(row['level'].toString()) ?? _level : _level;
+        _streak = row['streak'] != null ? int.tryParse(row['streak'].toString()) ?? _streak : _streak;
+        _completedQuizzesCount = row['completed_quizzes'] != null ? int.tryParse(row['completed_quizzes'].toString()) ?? _completedQuizzesCount : _completedQuizzesCount;
+
         _prefs.setString('student_name', _studentName);
         _prefs.setString('student_phone', _studentPhone);
         _prefs.setString('student_class', _studentClass);
         _prefs.setString('student_school', _studentSchool);
+        _prefs.setInt('xp', _xp);
+        _prefs.setInt('level', _level);
+        _prefs.setInt('streak', _streak);
+        _prefs.setInt('completed_quizzes_count', _completedQuizzesCount);
         
         notifyListeners();
         print('✅ Database profile sync successful for $email: $_studentName');
@@ -1161,7 +1529,7 @@ class AppState extends ChangeNotifier {
       
       // 1. Fetch homework from app_homework
       final hwResults = await conn.execute(
-        'SELECT id, title, subject, description, due_date, priority, added_by, teacher_id, class_level FROM app_homework ORDER BY id DESC;'
+        'SELECT id, title, subject, description, due_date, priority, added_by, teacher_id, class_level, file_name, file_path, file_url FROM app_homework ORDER BY id DESC;'
       );
       
       final dbHomework = <Map<String, dynamic>>[];
@@ -1182,6 +1550,9 @@ class AppState extends ChangeNotifier {
           'studentComment': '',
           'grade': 'Pending Grade',
           'teacherFeedback': '',
+          'teacherFileName': assoc['file_name'] ?? '',
+          'teacherFilePath': assoc['file_path'] ?? '',
+          'teacherFileUrl': assoc['file_url'] ?? '',
         });
       }
 
@@ -1437,6 +1808,7 @@ class AppState extends ChangeNotifier {
     syncHomeworkAndNotesFromDb();
     syncSyllabusAndGamesFromDb();
     
+    startSyncTimer();
     notifyListeners();
   }
 
@@ -1460,6 +1832,7 @@ class AppState extends ChangeNotifier {
     syncHomeworkAndNotesFromDb();
     syncSyllabusAndGamesFromDb();
     
+    startSyncTimer();
     notifyListeners();
   }
 
@@ -1943,12 +2316,18 @@ class AppState extends ChangeNotifier {
     _prefs.setString('recorded_lectures', jsonEncode(_recordedLectures));
   }
 
-  Future<void> addRecordedLecture(String title, String description, String uploadedBy, String emojiOrFileName) async {
+  Future<void> addRecordedLecture(String title, String description, String uploadedBy, String emojiOrFileName, {String? videoUrl}) async {
+    String? finalUrl = videoUrl;
+    if (videoUrl != null && videoUrl.isNotEmpty && !videoUrl.startsWith('http')) {
+      finalUrl = await DbHelper.uploadFile(videoUrl);
+    }
+
     final newLecture = {
       'title': title,
       'duration': description,
       'teacher': uploadedBy,
       'emoji': emojiOrFileName,
+      'videoUrl': finalUrl ?? 'https://flutter.github.io/assets-for-api-docs/assets/videos/butterfly.mp4',
     };
     _recordedLectures.insert(0, newLecture);
     _saveRecordedLectures();
@@ -1960,6 +2339,7 @@ class AppState extends ChangeNotifier {
         duration: description,
         teacher: uploadedBy,
         emoji: emojiOrFileName,
+        videoUrl: finalUrl,
       );
       if (dbId > 0) {
         _recordedLectures[0]['id'] = dbId;
@@ -1983,6 +2363,20 @@ class AppState extends ChangeNotifier {
       print('✅ TiDB recorded lectures sync complete! Total: ${_recordedLectures.length}');
     } catch (e) {
       print('⚠️ Failed to sync recorded lectures: $e');
+    }
+  }
+
+  Future<void> syncLeaderboardFromDb() async {
+    print('🔄 Synchronizing leaderboard from TiDB Cloud database...');
+    try {
+      final dbLeaderboard = await DbHelper.getLeaderboardData();
+      if (dbLeaderboard.isNotEmpty) {
+        _leaderboard = dbLeaderboard;
+        notifyListeners();
+      }
+      print('✅ TiDB leaderboard sync complete! Total: ${_leaderboard.length}');
+    } catch (e) {
+      print('⚠️ Failed to sync leaderboard: $e');
     }
   }
 
@@ -2385,6 +2779,14 @@ class AppState extends ChangeNotifier {
     required String attachmentName,
     required String attachmentPath,
   }) async {
+    String finalPath = attachmentPath;
+    if (attachmentPath.isNotEmpty && !attachmentPath.startsWith('http')) {
+      final url = await DbHelper.uploadFile(attachmentPath);
+      if (url != null) {
+        finalPath = url;
+      }
+    }
+
     final newId = _doubts.isEmpty
         ? 1
         : (_doubts.map((d) => d['id'] as int).reduce((a, b) => a > b ? a : b) + 1);
@@ -2397,7 +2799,7 @@ class AppState extends ChangeNotifier {
       'question': question,
       'attachmentType': attachmentType,
       'attachmentName': attachmentName,
-      'attachmentPath': attachmentPath,
+      'attachmentPath': finalPath,
       'replied': false,
       'replyText': '',
       'replyAttachmentType': 'None',
@@ -2417,7 +2819,7 @@ class AppState extends ChangeNotifier {
         question: question,
         attachmentType: attachmentType,
         attachmentName: attachmentName,
-        attachmentPath: attachmentPath,
+        attachmentPath: finalPath,
         teacherId: _teacherId.isNotEmpty ? _teacherId : 'teacher_mps8yshu_48f5p2',
       );
       if (dbId > 0) {
@@ -2437,13 +2839,21 @@ class AppState extends ChangeNotifier {
     required String replyAttachmentName,
     required String replyAttachmentPath,
   }) async {
+    String finalPath = replyAttachmentPath;
+    if (replyAttachmentPath.isNotEmpty && !replyAttachmentPath.startsWith('http')) {
+      final url = await DbHelper.uploadFile(replyAttachmentPath);
+      if (url != null) {
+        finalPath = url;
+      }
+    }
+
     final index = _doubts.indexWhere((d) => d['id'] == id);
     if (index != -1) {
       _doubts[index]['replied'] = true;
       _doubts[index]['replyText'] = replyText;
       _doubts[index]['replyAttachmentType'] = replyAttachmentType;
       _doubts[index]['replyAttachmentName'] = replyAttachmentName;
-      _doubts[index]['replyAttachmentPath'] = replyAttachmentPath;
+      _doubts[index]['replyAttachmentPath'] = finalPath;
       _saveDoubts();
       notifyListeners();
 
@@ -2453,7 +2863,7 @@ class AppState extends ChangeNotifier {
           replyText,
           replyAttachmentType: replyAttachmentType,
           replyAttachmentName: replyAttachmentName,
-          replyAttachmentPath: replyAttachmentPath,
+          replyAttachmentPath: finalPath,
         );
       } catch (e) {
         print('⚠️ Failed to sync doubt solution: $e');
@@ -2645,6 +3055,58 @@ class AppState extends ChangeNotifier {
         ),
       );
     }
+  }
+
+  // ── PERIODIC DATABASE SYNC TIMER ──
+  void startSyncTimer() {
+    _syncTimer?.cancel();
+    _syncTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
+      syncAllData();
+    });
+    print('🔄 Periodic database sync timer started (5s interval).');
+  }
+
+  void stopSyncTimer() {
+    _syncTimer?.cancel();
+    _syncTimer = null;
+    print('🛑 Periodic database sync timer stopped.');
+  }
+
+  Future<void> syncAllData() async {
+    if (_isSyncing || !_isLoggedIn) return;
+    _isSyncing = true;
+    try {
+      if (_userRole == 'student') {
+        if (_studentEmail.isNotEmpty) {
+          await syncHomeworkAndNotesFromDb();
+          await syncSyllabusAndGamesFromDb();
+          await syncDoubtsFromDb();
+          await syncTeacherMessagesFromDb();
+          await syncLiveClassesFromDb();
+          await syncRecordedLecturesFromDb();
+          await syncAttendanceFromDb();
+          await syncLeaderboardFromDb();
+        }
+      } else if (_userRole == 'teacher') {
+        await syncTeacherSubmissionsFromDb();
+        await syncDoubtsFromDb();
+        await syncTeacherMessagesFromDb();
+        await syncLiveClassesFromDb();
+        await syncRecordedLecturesFromDb();
+        await syncSyllabusAndGamesFromDb();
+        await syncLeaderboardFromDb();
+      }
+    } catch (e) {
+      print('⚠️ Error during periodic background data sync: $e');
+    } finally {
+      _isSyncing = false;
+    }
+  }
+
+  @override
+  void dispose() {
+    stopSyncTimer();
+    super.dispose();
   }
 }
 

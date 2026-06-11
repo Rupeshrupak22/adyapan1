@@ -229,6 +229,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final state = Provider.of<AppState>(context);
+
+    // Dynamically update text controllers from fetched database profile values
+    if (_nameController.text != state.studentName) {
+      _nameController.text = state.studentName;
+    }
+    if (_emailController.text != state.studentEmail) {
+      _emailController.text = state.studentEmail;
+    }
+    if (_phoneController.text != state.studentPhone) {
+      _phoneController.text = state.studentPhone;
+    }
+    if (_schoolController.text != state.studentSchool) {
+      _schoolController.text = state.studentSchool;
+    }
+    if (_selectedClass != state.studentClass) {
+      _selectedClass = state.studentClass;
+    }
+
     String initials = '';
     if (_nameController.text.trim().isNotEmpty) {
       List<String> parts = _nameController.text.trim().split(' ');
@@ -253,7 +272,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
-          '👤 Student Profile',
+          state.userRole == 'teacher' ? '👤 Educator Profile' : '👤 Student Profile',
           style: GoogleFonts.fredoka(
             fontWeight: FontWeight.bold,
             color: AdyapanTheme.textMain,
@@ -404,6 +423,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       const SizedBox(width: 8),
                       Consumer<AppState>(
                         builder: (context, state, child) {
+                          if (state.userRole == 'teacher') {
+                            return const SizedBox.shrink();
+                          }
                           return Container(
                             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                             decoration: BoxDecoration(
@@ -516,15 +538,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 height: 50,
                                 padding: const EdgeInsets.symmetric(horizontal: 14),
                                 decoration: BoxDecoration(
-                                  color: Colors.white,
+                                  color: const Color(0xFFF1F5F9),
                                   borderRadius: BorderRadius.circular(16),
-                                  border: Border.all(color: const Color(0xFFCBD5E1)),
+                                  border: Border.all(color: const Color(0xFFE2E8F0)),
                                 ),
                                 child: DropdownButtonHideUnderline(
                                   child: DropdownButton<String>(
                                     value: _selectedClass,
                                     isExpanded: true,
-                                    icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AdyapanTheme.textMuted),
+                                    icon: const Icon(Icons.arrow_drop_down_rounded, color: AdyapanTheme.blueAccent, size: 24),
                                     style: GoogleFonts.outfit(
                                       fontSize: 14,
                                       color: AdyapanTheme.textMain,
@@ -537,10 +559,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                         });
                                       }
                                     },
-                                    items: <String>[
-                                      'Class 1', 'Class 2', 'Class 3', 'Class 4', 'Class 5',
-                                      'Class 6', 'Class 7', 'Class 8', 'Class 9', 'Class 10'
-                                    ].map<DropdownMenuItem<String>>((String value) {
+                                    items: (() {
+                                      final list = <String>[
+                                        'Class 1', 'Class 2', 'Class 3', 'Class 4', 'Class 5',
+                                        'Class 6', 'Class 7', 'Class 8', 'Class 9', 'Class 10',
+                                        'Class 11', 'Class 12'
+                                      ];
+                                      if (!list.contains(_selectedClass)) {
+                                        list.add(_selectedClass);
+                                      }
+                                      return list;
+                                    }()).map<DropdownMenuItem<String>>((String value) {
                                       return DropdownMenuItem<String>(
                                         value: value,
                                         child: Text(value),
@@ -643,13 +672,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: const Color(0xFFF1F5F9), // Slate gray background for premium read-only style
         borderRadius: BorderRadius.circular(16),
       ),
       child: TextFormField(
         controller: controller,
         keyboardType: keyboardType,
         validator: validator,
+        readOnly: true, // Completely read-only
         onChanged: (text) {
           // Trigger redraw of header name/initials
           if (controller == _nameController) {
@@ -658,7 +688,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         },
         style: GoogleFonts.outfit(
           fontSize: 14,
-          color: AdyapanTheme.textMain,
+          color: const Color(0xFF64748B), // Slate gray read-only font color
           fontWeight: FontWeight.bold,
         ),
         decoration: InputDecoration(
@@ -672,15 +702,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
           contentPadding: const EdgeInsets.symmetric(vertical: 16),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
+            borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
+            borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: AdyapanTheme.blueAccent, width: 2),
+            borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
           ),
           errorBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
