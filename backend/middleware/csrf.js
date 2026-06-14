@@ -56,6 +56,18 @@ function csrfProtection(req, res, next) {
     return next();
   }
 
+  // Exempt: public auth endpoints (login, register) — used by mobile apps without prior token
+  const publicPaths = ['/api/v1/auth/login', '/api/v1/auth/register', '/api/v1/auth/refresh'];
+  if (publicPaths.some(p => req.path === p || req.originalUrl === p)) {
+    return next();
+  }
+
+  // Exempt: requests from mobile apps (identified by platform header or user-agent)
+  const userAgent = (req.get('user-agent') || '').toLowerCase();
+  if (/dart|flutter|android|iphone|okhttp/.test(userAgent)) {
+    return next();
+  }
+
   // Validate CSRF token
   const cookieToken = req.cookies?.[CSRF_COOKIE];
   const headerToken = req.headers[CSRF_HEADER];
