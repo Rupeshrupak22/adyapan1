@@ -1,9 +1,12 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
+import 'dart:typed_data';
 import 'package:mysql_client/mysql_client.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
+import 'package:dbcrypt/dbcrypt.dart';
+import 'package:argon2/argon2.dart';
 
 class DbHelper {
   static MySQLConnection? _conn;
@@ -435,76 +438,38 @@ class DbHelper {
     }
   }
 
-  // Validate credentials in Next.js API & TiDB Database
+  // Validate credentials against TiDB Database (direct connection with hash verification)
   static Future<Map<String, dynamic>?> loginUser(String email, String password) async {
     final cleanEmail = email.toLowerCase().trim();
     print('🔐 Login attempt: $cleanEmail');
 
-    // 1. Try Next.js REST API first
-    Map<String, dynamic>? apiUser;
-    bool apiRejected = false; // API explicitly rejected credentials
-    try {
-      final apiResponse = await callAuthApi(
-        path: '/api/v1/auth/login',
-        body: {'email': cleanEmail, 'password': password},
-      );
-      if (apiResponse != null) {
-        // Check API did not return an error
-        final hasError = apiResponse['error'] != null ||
-            apiResponse['success'] == false;
-        if (!hasError) {
-          // Backend wraps response in 'data': { "data": { "token": "...", "user": {...} } }
-          final dataObj = apiResponse['data'] ?? apiResponse;
-          final userObj = dataObj['user'] ?? apiResponse['user'] ?? apiResponse;
-          if (userObj['email'] != null) {
-            print('✅ API login success');
-            apiUser = {
-              'name': userObj['name'] ?? '',
-              'email': userObj['email'] ?? cleanEmail,
-              'phone': userObj['phone'] ?? '',
-              'className': userObj['className'] ?? userObj['class_name'] ?? userObj['class_level'] ?? '',
-              'school': userObj['school'] ?? userObj['school_name'] ?? '',
-              'role': userObj['role'] ?? 'student',
-              'teacher_id': userObj['teacher_id'] ?? '',
-              'id': userObj['id'] ?? userObj['_id'] ?? '',
-            };
-            return apiUser;
-          }
-        } else {
-          print('❌ API returned error: ${apiResponse['error'] ?? apiResponse['message']}');
-          // API was reachable and explicitly rejected — don't try direct DB
-          apiRejected = true;
-        }
-      }
-    } catch (e) {
-      print('⚠️ API login failed, trying direct DB: $e');
-    }
-
-    // If the API explicitly rejected the credentials, don't fallback to DB
-    // (Direct DB can't verify hashed passwords anyway)
-    if (apiRejected) {
-      return null;
-    }
-
-    // 2. Direct TiDB Database — fallback only when API is unreachable
+    // Connect directly to TiDB Cloud and verify password hash in Dart
     try {
       final conn = await getConnection();
       final results = await conn.execute('''
-        SELECT id, name, email, phone, class_name, class_level, school, school_name, role, teacher_id, xp, level, streak, completed_quizzes
+        SELECT id, name, email, phone, class_name, class_level, school, school_name, role, teacher_id, 
+               password, password_hash, xp, level, streak, completed_quizzes
         FROM users
-        WHERE LOWER(email) = :email AND (password = :password OR password_hash = :password);
+        WHERE LOWER(email) = :email;
       ''', {
         'email': cleanEmail,
-        'password': password,
       });
 
       if (results.rows.isEmpty) {
-        print('❌ DB: No match for $cleanEmail / password');
-        if (apiUser != null) return apiUser;
+        print('❌ DB: No user found for $cleanEmail');
         return null;
       }
 
       final row = results.rows.first.assoc();
+      final storedHash = row['password_hash'] ?? row['password'] ?? '';
+
+      // Verify password against stored hash (supports Argon2id, bcrypt, plain text)
+      final isValid = await _verifyPasswordHash(password, storedHash);
+      if (!isValid) {
+        print('❌ DB: Password mismatch for $cleanEmail');
+        return null;
+      }
+
       print('✅ Direct DB login success for $cleanEmail');
 
       // Log login event (non-critical)
@@ -542,9 +507,117 @@ class DbHelper {
       };
     } catch (e) {
       print('❌ Direct DB login error: $e');
-      if (apiUser != null) return apiUser;
       rethrow;
     }
+  }
+
+  /// Verify password against stored hash (supports Argon2id, bcrypt, and plain text)
+  static Future<bool> _verifyPasswordHash(String password, String storedHash) async {
+    if (storedHash.isEmpty) return false;
+
+    // Argon2id hash: $argon2id$v=19$m=65536,t=3,p=1$...
+    if (storedHash.startsWith('\$argon2')) {
+      try {
+        return await _verifyArgon2(password, storedHash);
+      } catch (e) {
+        print('⚠️ Argon2 verify error: $e');
+        return false;
+      }
+    }
+
+    // bcrypt hash: $2a$, $2b$, $2y$
+    if (RegExp(r'^\$2[aby]\$').hasMatch(storedHash)) {
+      try {
+        final bcrypt = DBCrypt();
+        return bcrypt.checkpw(password, storedHash);
+      } catch (e) {
+        print('⚠️ BCrypt verify error: $e');
+        return false;
+      }
+    }
+
+    // Plain text (legacy) — constant-time-ish comparison
+    return password == storedHash;
+  }
+
+  /// Verify Argon2id hash using the pure Dart argon2 package
+  static Future<bool> _verifyArgon2(String password, String hashString) async {
+    // Parse the Argon2id hash string: $argon2id$v=19$m=65536,t=3,p=1$<base64 salt>$<base64 hash>
+    final parts = hashString.split('\$');
+    // parts: ['', 'argon2id', 'v=19', 'm=65536,t=3,p=1', '<base64 salt>', '<base64 hash>']
+    if (parts.length < 6) return false;
+
+    // Determine argon2 type
+    final typeStr = parts[1];
+    int type;
+    if (typeStr == 'argon2id') {
+      type = Argon2Parameters.ARGON2_id;
+    } else if (typeStr == 'argon2i') {
+      type = Argon2Parameters.ARGON2_i;
+    } else if (typeStr == 'argon2d') {
+      type = Argon2Parameters.ARGON2_d;
+    } else {
+      return false;
+    }
+
+    // Parse version
+    int version = Argon2Parameters.ARGON2_VERSION_13; // default v=19 (0x13)
+    if (parts[2].startsWith('v=')) {
+      final v = int.tryParse(parts[2].substring(2));
+      if (v == 16) version = Argon2Parameters.ARGON2_VERSION_10;
+      if (v == 19) version = Argon2Parameters.ARGON2_VERSION_13;
+    }
+
+    // Parse params: m=65536,t=3,p=1
+    final paramParts = parts[3].split(',');
+    int memory = 65536;
+    int iterations = 3;
+    int parallelism = 1;
+    for (final p in paramParts) {
+      if (p.startsWith('m=')) memory = int.tryParse(p.substring(2)) ?? memory;
+      if (p.startsWith('t=')) iterations = int.tryParse(p.substring(2)) ?? iterations;
+      if (p.startsWith('p=')) parallelism = int.tryParse(p.substring(2)) ?? parallelism;
+    }
+
+    final saltBase64 = parts[4];
+    final hashBase64 = parts[5];
+
+    // Decode base64 (Argon2 uses base64 without padding)
+    final salt = base64Decode(_addBase64Padding(saltBase64));
+    final expectedHash = base64Decode(_addBase64Padding(hashBase64));
+
+    // Configure Argon2 parameters
+    final parameters = Argon2Parameters(
+      type,
+      salt,
+      version: version,
+      iterations: iterations,
+      memory: memory,
+      lanes: parallelism,
+    );
+
+    // Generate hash from password
+    final argon2 = Argon2BytesGenerator();
+    argon2.init(parameters);
+
+    final passwordBytes = parameters.converter.convert(password);
+    final result = Uint8List(expectedHash.length);
+    argon2.generateBytes(passwordBytes, result, 0, result.length);
+
+    // Constant-time comparison
+    if (result.length != expectedHash.length) return false;
+    int diff = 0;
+    for (int i = 0; i < result.length; i++) {
+      diff |= result[i] ^ expectedHash[i];
+    }
+    return diff == 0;
+  }
+
+  /// Add padding to base64 string if needed
+  static String _addBase64Padding(String base64Str) {
+    final remainder = base64Str.length % 4;
+    if (remainder == 0) return base64Str;
+    return base64Str + '=' * (4 - remainder);
   }
 
 
