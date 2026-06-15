@@ -289,13 +289,22 @@ class DbHelper {
             ...body,
             'clientType': 'mobile',
           }),
-        ).timeout(const Duration(seconds: 4));
+        ).timeout(const Duration(seconds: 8));
         
         print('📡 Auth API response status: ${response.statusCode}');
         if (response.statusCode == 200 || response.statusCode == 201) {
           final data = jsonDecode(response.body);
           print('📡 Auth API response data: $data');
           return data;
+        }
+        // API responded with an error (401, 403, etc.) — return the error response
+        // so caller knows the API was reachable but credentials were wrong
+        if (response.statusCode >= 400 && response.statusCode < 500) {
+          try {
+            final errorData = jsonDecode(response.body);
+            print('📡 Auth API error response: $errorData');
+            return errorData; // Will have success: false
+          } catch (_) {}
         }
       } catch (e) {
         print('⚠️ Failed to hit Auth API on $base: $e');
@@ -433,6 +442,7 @@ class DbHelper {
 
     // 1. Try Next.js REST API first
     Map<String, dynamic>? apiUser;
+    bool apiRejected = false; // API explicitly rejected credentials
     try {
       final apiResponse = await callAuthApi(
         path: '/api/v1/auth/login',
@@ -441,17 +451,18 @@ class DbHelper {
       if (apiResponse != null) {
         // Check API did not return an error
         final hasError = apiResponse['error'] != null ||
-            apiResponse['message']?.toString().toLowerCase().contains('invalid') == true ||
             apiResponse['success'] == false;
         if (!hasError) {
-          final userObj = apiResponse['user'] ?? apiResponse;
+          // Backend wraps response in 'data': { "data": { "token": "...", "user": {...} } }
+          final dataObj = apiResponse['data'] ?? apiResponse;
+          final userObj = dataObj['user'] ?? apiResponse['user'] ?? apiResponse;
           if (userObj['email'] != null) {
             print('✅ API login success');
             apiUser = {
               'name': userObj['name'] ?? '',
               'email': userObj['email'] ?? cleanEmail,
               'phone': userObj['phone'] ?? '',
-              'className': userObj['className'] ?? userObj['class_name'] ?? '',
+              'className': userObj['className'] ?? userObj['class_name'] ?? userObj['class_level'] ?? '',
               'school': userObj['school'] ?? userObj['school_name'] ?? '',
               'role': userObj['role'] ?? 'student',
               'teacher_id': userObj['teacher_id'] ?? '',
@@ -461,13 +472,21 @@ class DbHelper {
           }
         } else {
           print('❌ API returned error: ${apiResponse['error'] ?? apiResponse['message']}');
+          // API was reachable and explicitly rejected — don't try direct DB
+          apiRejected = true;
         }
       }
     } catch (e) {
       print('⚠️ API login failed, trying direct DB: $e');
     }
 
-    // 2. Direct TiDB Database — original working query
+    // If the API explicitly rejected the credentials, don't fallback to DB
+    // (Direct DB can't verify hashed passwords anyway)
+    if (apiRejected) {
+      return null;
+    }
+
+    // 2. Direct TiDB Database — fallback only when API is unreachable
     try {
       final conn = await getConnection();
       final results = await conn.execute('''

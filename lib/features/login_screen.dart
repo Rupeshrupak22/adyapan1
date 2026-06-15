@@ -183,24 +183,14 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       return;
     }
 
-    // Student login — DB with offline fallback (with testing bypass to accept any credentials)
+    // Student login
     bool loginSuccess = false;
-    bool offlineMode = false;
     try {
       loginSuccess = await state.loginUser(email, password);
       if (!mounted) return;
-      if (!loginSuccess) {
-        // Credentials didn't match in the DB - bypass for UI/UX testing!
-        offlineMode = true;
-        loginSuccess = true;
-        await state.loginAsStudent(email);
-      }
     } catch (e) {
       if (!mounted) return;
-      // DB connection failed or offline — bypass for UI/UX testing!
-      offlineMode = true;
-      loginSuccess = true;
-      await state.loginAsStudent(email);
+      loginSuccess = false;
     }
 
     if (loginSuccess) {
@@ -213,7 +203,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  offlineMode ? 'Welcome back Student! Login successful (Offline Mode).' : 'Welcome back Student! Login successful.',
+                  'Welcome back Student! Login successful.',
                   style: AdyapanTheme.outfit(fontWeight: FontWeight.bold, color: Colors.white),
                 ),
               ),
