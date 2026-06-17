@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:async';
 import 'db_helper.dart';
+import 'api_service.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -670,35 +671,24 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  // Validate credentials against remote TiDB Database strictly (no local fallbacks)
+  // Authenticate via the backend REST API (same server as the website)
+  // This ensures Argon2id password verification is done server-side,
+  // so credentials created on the website work on the mobile app and vice versa.
   Future<bool> loginUser(String email, String password) async {
     try {
-      final user = await DbHelper.loginUser(email, password);
-      if (user == null) {
-        return false;
-      }
+      final api = ApiService();
+      final user = await api.loginWithDetails(email, password);
       
-      // Update local profile state
-      _studentName = user['name'];
-      _studentEmail = user['email'];
-      _studentPhone = user['phone'];
-      _studentClass = user['className'];
-      _studentSchool = user['school'];
+      // Update local profile state from API response
+      _studentName = user['name'] ?? '';
+      _studentEmail = user['email'] ?? '';
+      _studentPhone = user['phone'] ?? '';
+      _studentClass = user['class_name'] ?? user['class_level'] ?? '';
+      _studentSchool = user['school_name'] ?? '';
       
       _userRole = user['role'] ?? 'student';
       _teacherId = user['teacher_id'] ?? '';
       _userId = user['id'] ?? '';
-      
-      // Map gamified stats
-      _xp = user['xp'] != null ? int.tryParse(user['xp'].toString()) ?? _xp : _xp;
-      _level = user['level'] != null ? int.tryParse(user['level'].toString()) ?? _level : _level;
-      _streak = user['streak'] != null ? int.tryParse(user['streak'].toString()) ?? _streak : _streak;
-      _completedQuizzesCount = user['completedQuizzes'] != null ? int.tryParse(user['completedQuizzes'].toString()) ?? _completedQuizzesCount : _completedQuizzesCount;
-
-      _prefs.setInt('xp', _xp);
-      _prefs.setInt('level', _level);
-      _prefs.setInt('streak', _streak);
-      _prefs.setInt('completed_quizzes_count', _completedQuizzesCount);
       
       _prefs.setString('student_name', _studentName);
       _prefs.setString('student_email', _studentEmail);
@@ -711,6 +701,9 @@ class AppState extends ChangeNotifier {
       
       _isLoggedIn = true;
       _prefs.setBool('is_logged_in', true);
+      
+      // Sync gamified stats from DB (non-blocking)
+      _syncGamifiedStatsFromDb();
       
       if (_userRole == 'teacher') {
         await fetchLinkedStudents();
@@ -732,14 +725,42 @@ class AppState extends ChangeNotifier {
       startSyncTimer();
       notifyListeners();
       return true;
+    } on AuthException catch (e) {
+      print('❌ Auth error: ${e.message}');
+      throw Exception(e.message);
     } catch (e) {
-      print('❌ Database login strictly failed: $e');
-      // Rethrow to let the UI catch and display the exact database connection error!
-      throw Exception('Database Connection Error: $e');
+      print('❌ Login failed: $e');
+      throw Exception('Connection error. Please check your internet and try again.');
     }
   }
 
-  // Register a new user in remote TiDB Database strictly (no local fallbacks)
+  /// Fetch gamified stats (XP, level, streak) from DB after successful login
+  Future<void> _syncGamifiedStatsFromDb() async {
+    if (_studentEmail.isEmpty) return;
+    try {
+      final conn = await DbHelper.getConnection();
+      final results = await conn.execute(
+        'SELECT xp, level, streak, completed_quizzes FROM users WHERE LOWER(email) = :email LIMIT 1;',
+        {'email': _studentEmail.toLowerCase().trim()},
+      );
+      if (results.rows.isNotEmpty) {
+        final row = results.rows.first.assoc();
+        _xp = int.tryParse(row['xp'] ?? '') ?? _xp;
+        _level = int.tryParse(row['level'] ?? '') ?? _level;
+        _streak = int.tryParse(row['streak'] ?? '') ?? _streak;
+        _completedQuizzesCount = int.tryParse(row['completed_quizzes'] ?? '') ?? _completedQuizzesCount;
+        _prefs.setInt('xp', _xp);
+        _prefs.setInt('level', _level);
+        _prefs.setInt('streak', _streak);
+        _prefs.setInt('completed_quizzes_count', _completedQuizzesCount);
+        notifyListeners();
+      }
+    } catch (e) {
+      print('⚠️ Gamified stats sync (non-critical): $e');
+    }
+  }
+
+  // Register a new user via the backend REST API (password hashed server-side with Argon2id)
   Future<bool> registerUser({
     required String email,
     required String password,
@@ -751,23 +772,22 @@ class AppState extends ChangeNotifier {
     String? teacherId,
   }) async {
     try {
-      final success = await DbHelper.registerUser(
+      final api = ApiService();
+      final user = await api.registerWithDetails(
         name: name,
         email: email,
+        password: password,
         phone: phone,
         className: className,
         school: school,
-        password: password,
-        role: role,
-        teacherId: teacherId,
       );
-
-      if (!success) return false;
 
       _userRole = role;
       _teacherId = teacherId ?? '';
+      _userId = user['id'] ?? '';
       _prefs.setString('user_role', _userRole);
       _prefs.setString('teacher_id', _teacherId);
+      _prefs.setString('user_id', _userId);
 
       updateProfile(
         name: name,
@@ -777,11 +797,17 @@ class AppState extends ChangeNotifier {
         school: school,
       );
 
+      _isLoggedIn = true;
+      _prefs.setBool('is_logged_in', true);
+      notifyListeners();
+
       return true;
+    } on AuthException catch (e) {
+      print('❌ Registration auth error: ${e.message}');
+      throw Exception(e.message);
     } catch (e) {
-      print('❌ Database registration strictly failed: $e');
-      // Rethrow to let the UI catch and display the exact database connection error!
-      throw Exception('Database Connection Error: $e');
+      print('❌ Registration failed: $e');
+      throw Exception('Connection error. Please check your internet and try again.');
     }
   }
 
@@ -1837,7 +1863,9 @@ class AppState extends ChangeNotifier {
   }
 
   Future<bool> resetPassword(String email, String newPassword) async {
-    return await DbHelper.resetPassword(email, newPassword);
+    // Reset password via direct DB update with Argon2id hashing
+    // Note: This uses the backend's password hashing to stay consistent
+    return await DbHelper.resetPasswordSecure(email, newPassword);
   }
 
   // ── FOCUS SHIELD & PARENTAL CONTROL STATES ──

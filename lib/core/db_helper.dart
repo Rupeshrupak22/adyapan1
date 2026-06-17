@@ -273,50 +273,45 @@ class DbHelper {
     }
   }
 
-  // Call Next.js REST API for authentication (Tries both ngrok and local IP base URLs)
+  // Call REST API for authentication (uses the deployed backend)
   static Future<Map<String, dynamic>?> callAuthApi({
-    required String path, // '/api/auth/login' or '/api/auth/signup'
+    required String path, // '/api/v1/auth/login' or '/api/v1/auth/register'
     required Map<String, dynamic> body,
   }) async {
-    final baseUrl = dotenv.env['API_BASE_URL'] ?? 'https://abc123.ngrok-free.app';
-    final localUrl = dotenv.env['LOCAL_API_BASE_URL'] ?? 'http://192.168.1.25:3000';
+    final baseUrl = dotenv.env['API_BASE_URL'] ?? 'https://preschool-wzjj.onrender.com';
     
-    for (final base in [baseUrl, localUrl]) {
-      try {
-        final url = Uri.parse('${base.replaceAll(RegExp(r'/+$'), '')}$path');
-        print('📡 Hitting Auth API: $url');
-        final response = await http.post(
-          url,
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({
-            ...body,
-            'clientType': 'mobile',
-          }),
-        ).timeout(const Duration(seconds: 8));
-        
-        print('📡 Auth API response status: ${response.statusCode}');
-        if (response.statusCode == 200 || response.statusCode == 201) {
-          final data = jsonDecode(response.body);
-          print('📡 Auth API response data: $data');
-          return data;
-        }
-        // API responded with an error (401, 403, etc.) — return the error response
-        // so caller knows the API was reachable but credentials were wrong
-        if (response.statusCode >= 400 && response.statusCode < 500) {
-          try {
-            final errorData = jsonDecode(response.body);
-            print('📡 Auth API error response: $errorData');
-            return errorData; // Will have success: false
-          } catch (_) {}
-        }
-      } catch (e) {
-        print('⚠️ Failed to hit Auth API on $base: $e');
+    try {
+      final url = Uri.parse('${baseUrl.replaceAll(RegExp(r'/+$'), '')}$path');
+      print('📡 Hitting Auth API: $url');
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          ...body,
+          'platform': 'mobile',
+        }),
+      ).timeout(const Duration(seconds: 12));
+      
+      print('📡 Auth API response status: ${response.statusCode}');
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final data = jsonDecode(response.body);
+        return data;
       }
+      // API responded with an error (401, 403, 409, etc.)
+      if (response.statusCode >= 400 && response.statusCode < 500) {
+        try {
+          final errorData = jsonDecode(response.body);
+          return errorData;
+        } catch (_) {}
+      }
+    } catch (e) {
+      print('⚠️ Failed to hit Auth API: $e');
     }
     return null;
   }
 
-  // Register a new user in both remote TiDB and Next.js REST API
+  // Register a new user via the backend REST API (ensures Argon2id hashing)
+  // This method is kept as a fallback; primary registration should go through ApiService.
   static Future<bool> registerUser({
     required String name,
     required String email,
@@ -329,28 +324,31 @@ class DbHelper {
   }) async {
     final cleanEmail = email.toLowerCase().trim();
 
-    // 1. Sync in Next.js backend API (Only student role for Next.js, or try for both)
+    // Always use the backend API for registration — it hashes with Argon2id
     try {
       final body = {
         'name': name,
         'email': cleanEmail,
         'phone': phone,
-        'className': className,
         'class_name': className,
-        'school': school,
+        'school_name': school,
         'password': password,
         'role': role,
-        'teacher_id': teacherId,
+        'platform': 'mobile',
       };
       final apiResponse = await callAuthApi(path: '/api/v1/auth/register', body: body);
-      if (apiResponse != null) {
+      if (apiResponse != null && apiResponse['success'] == true) {
         return true;
       }
+      // If API returned 409 (user exists), propagate that
+      if (apiResponse != null && apiResponse['success'] == false) {
+        return false;
+      }
     } catch (e) {
-      print('⚠️ REST API signup sync failed, but proceeding with direct DB: $e');
+      print('⚠️ REST API signup failed: $e');
     }
 
-    // 2. Direct TiDB Database registration
+    // Fallback: Direct DB with Argon2id hashing done locally
     try {
       final conn = await getConnection();
 
@@ -368,7 +366,9 @@ class DbHelper {
           ? (teacherId ?? _newId('tch')) 
           : _newId('usr');
 
-      // Insert new user using named parameters and schema compatibility
+      // Hash password with Argon2id before storing
+      final hashedPassword = await _hashPasswordArgon2(password);
+
       await conn.execute('''
         INSERT INTO users (
           id, name, email, phone, 
@@ -381,7 +381,7 @@ class DbHelper {
           :id, :name, :email, :phone, 
           :className, :className, 
           :school, :school, 
-          :password, :password, 
+          :password, :passwordHash, 
           :role, :otpVerified, :signupSource, :teacherId
         );
       ''', {
@@ -391,11 +391,12 @@ class DbHelper {
         'phone': phone,
         'className': className,
         'school': school,
-        'password': password,
+        'password': hashedPassword,
+        'passwordHash': hashedPassword,
         'role': role,
         'otpVerified': 1,
         'signupSource': 'flutter',
-        'teacherId': role == 'teacher' ? userId : teacherId, // For teachers, teacherId is their own ID!
+        'teacherId': role == 'teacher' ? userId : teacherId,
       });
 
       return true;
@@ -405,13 +406,18 @@ class DbHelper {
     }
   }
 
-  // Reset password in remote TiDB Database directly (no local fallbacks)
+  // Reset password — DEPRECATED plain text version kept for backward compat
   static Future<bool> resetPassword(String email, String newPassword) async {
+    return resetPasswordSecure(email, newPassword);
+  }
+
+  // Reset password securely with Argon2id hashing
+  static Future<bool> resetPasswordSecure(String email, String newPassword) async {
     final cleanEmail = email.toLowerCase().trim();
     try {
       final conn = await getConnection();
       
-      // Check if user already exists
+      // Check if user exists
       final checkRes = await conn.execute(
         'SELECT id FROM users WHERE LOWER(email) = :email;',
         {'email': cleanEmail},
@@ -421,14 +427,17 @@ class DbHelper {
         return false; // Email not registered!
       }
 
-      // Update password
+      // Hash the new password with Argon2id before storing
+      final hashedPassword = await _hashPasswordArgon2(newPassword);
+
+      // Update both password fields with the hash
       await conn.execute('''
         UPDATE users 
-        SET password = :password, password_hash = :password 
+        SET password = :password, password_hash = :password, updated_at = NOW()
         WHERE LOWER(email) = :email;
       ''', {
         'email': cleanEmail,
-        'password': newPassword,
+        'password': hashedPassword,
       });
 
       return true;
@@ -436,6 +445,37 @@ class DbHelper {
       print('❌ Database password reset error: $e');
       return false;
     }
+  }
+
+  /// Hash a password using Argon2id (matching the Node.js backend config)
+  /// Config: memoryCost=65536 (64MB), timeCost=3, parallelism=1, hashLength=32
+  static Future<String> _hashPasswordArgon2(String password) async {
+    // Generate a random 16-byte salt
+    final salt = Uint8List(16);
+    for (int i = 0; i < 16; i++) {
+      salt[i] = _random.nextInt(256);
+    }
+
+    final parameters = Argon2Parameters(
+      Argon2Parameters.ARGON2_id,
+      salt,
+      version: Argon2Parameters.ARGON2_VERSION_13,
+      iterations: 3,
+      memory: 65536,
+      lanes: 1,
+    );
+
+    final argon2 = Argon2BytesGenerator();
+    argon2.init(parameters);
+
+    final passwordBytes = parameters.converter.convert(password);
+    final result = Uint8List(32); // 32-byte hash
+    argon2.generateBytes(passwordBytes, result, 0, result.length);
+
+    // Encode to standard Argon2 hash string format (compatible with Node.js argon2 package)
+    final saltB64 = base64Encode(salt).replaceAll('=', '');
+    final hashB64 = base64Encode(result).replaceAll('=', '');
+    return '\$argon2id\$v=19\$m=65536,t=3,p=1\$$saltB64\$$hashB64';
   }
 
   // Validate credentials against TiDB Database (direct connection with hash verification)

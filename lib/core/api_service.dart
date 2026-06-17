@@ -3,15 +3,16 @@ import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Unified API Service — connects mobile app to Render backend
-/// All data flows through this service → same data on website & app
+/// Unified API Service — connects mobile app to the shared backend
+/// All authentication flows through this service to ensure password hashing
+/// is handled server-side (Argon2id) and credentials work across all platforms.
 class ApiService {
   static final ApiService _instance = ApiService._internal();
   factory ApiService() => _instance;
   ApiService._internal();
 
   String get baseUrl =>
-      dotenv.env['API_BASE_URL'] ?? 'https://preschool-wzj1.onrender.com';
+      dotenv.env['API_BASE_URL'] ?? 'https://preschool-wzjj.onrender.com';
 
   String? _token;
   String? _refreshToken;
@@ -48,29 +49,163 @@ class ApiService {
   }
 
   bool get isLoggedIn => _token != null;
+  String? get token => _token;
 
   // ─── AUTH ─────────────────────────────────────────────────────────
 
-  Future<Map<String, dynamic>?> login(String email, String password) async {
+  /// Login via backend API — returns user map on success, throws on error
+  /// The backend handles Argon2id verification so credentials work across
+  /// website and mobile app identically.
+  /// Automatically handles session conflicts (409) by clearing previous sessions.
+  Future<Map<String, dynamic>> loginWithDetails(String email, String password) async {
+    final cleanEmail = email.toLowerCase().trim();
+
+    final res = await http.post(
+      Uri.parse('$baseUrl/api/v1/auth/login'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'email': cleanEmail,
+        'password': password,
+        'platform': 'mobile',
+      }),
+    ).timeout(const Duration(seconds: 15));
+
+    final data = jsonDecode(res.body) as Map<String, dynamic>;
+
+    if (res.statusCode == 200 && data['success'] == true) {
+      final userData = data['data'] as Map<String, dynamic>;
+      await _saveTokens(
+        userData['token'] as String,
+        userData['refreshToken'] as String,
+      );
+      return userData['user'] as Map<String, dynamic>;
+    }
+
+    // Handle 409: Active session exists on another device
+    // Auto-clear previous sessions and retry login
+    if (res.statusCode == 409) {
+      final cleared = await _clearPreviousSessions(cleanEmail, password);
+      if (cleared) {
+        // Retry login after clearing sessions
+        final retryRes = await http.post(
+          Uri.parse('$baseUrl/api/v1/auth/login'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'email': cleanEmail,
+            'password': password,
+            'platform': 'mobile',
+          }),
+        ).timeout(const Duration(seconds: 15));
+
+        final retryData = jsonDecode(retryRes.body) as Map<String, dynamic>;
+        if (retryRes.statusCode == 200 && retryData['success'] == true) {
+          final userData = retryData['data'] as Map<String, dynamic>;
+          await _saveTokens(
+            userData['token'] as String,
+            userData['refreshToken'] as String,
+          );
+          return userData['user'] as Map<String, dynamic>;
+        }
+      }
+      // If clearing failed, report the session conflict
+      throw AuthException('Session active on another device. Please try again.');
+    }
+
+    // Handle other error codes
+    final message = data['message'] as String? ?? 'Login failed';
+    final statusCode = res.statusCode;
+
+    if (statusCode == 401) {
+      throw AuthException('Invalid email or password');
+    } else if (statusCode == 423) {
+      throw AuthException(message); // Account locked
+    } else if (statusCode == 429) {
+      throw AuthException('Too many attempts. Please try again later.');
+    } else if (statusCode == 403) {
+      throw AuthException('Account is not active. Contact admin.');
+    } else {
+      throw AuthException(message);
+    }
+  }
+
+  /// Clear previous sessions (used when 409 conflict is returned)
+  Future<bool> _clearPreviousSessions(String email, String password) async {
     try {
       final res = await http.post(
-        Uri.parse('$baseUrl/api/v1/auth/login'),
+        Uri.parse('$baseUrl/api/v1/auth/clear-previous-sessions'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'email': email, 'password': password, 'platform': 'mobile'}),
+        body: jsonEncode({
+          'email': email,
+          'password': password,
+        }),
       ).timeout(const Duration(seconds: 10));
 
-      final data = jsonDecode(res.body);
-      if (res.statusCode == 200 && data['success'] == true) {
-        await _saveTokens(data['data']['token'], data['data']['refreshToken']);
-        return data['data']['user'];
+      if (res.statusCode == 200) {
+        return true;
       }
-      return null;
+      return false;
+    } catch (e) {
+      print('⚠️ Clear sessions failed: $e');
+      return false;
+    }
+  }
+
+  /// Simple login that returns user map or null (backward compat)
+  Future<Map<String, dynamic>?> login(String email, String password) async {
+    try {
+      return await loginWithDetails(email, password);
     } catch (e) {
       print('❌ Login error: $e');
       return null;
     }
   }
 
+  /// Register via backend API — password is hashed server-side with Argon2id
+  Future<Map<String, dynamic>> registerWithDetails({
+    required String name,
+    required String email,
+    required String password,
+    required String phone,
+    String? className,
+    String? school,
+  }) async {
+    final res = await http.post(
+      Uri.parse('$baseUrl/api/v1/auth/register'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'name': name.trim(),
+        'email': email.toLowerCase().trim(),
+        'password': password,
+        'phone': phone,
+        'class_name': className,
+        'school_name': school,
+        'platform': 'mobile',
+      }),
+    ).timeout(const Duration(seconds: 15));
+
+    final data = jsonDecode(res.body) as Map<String, dynamic>;
+
+    if (res.statusCode == 201 && data['success'] == true) {
+      final userData = data['data'] as Map<String, dynamic>;
+      await _saveTokens(
+        userData['token'] as String,
+        userData['refreshToken'] as String,
+      );
+      return userData['user'] as Map<String, dynamic>;
+    }
+
+    final message = data['message'] as String? ?? 'Registration failed';
+
+    if (res.statusCode == 409) {
+      throw AuthException('User with this email already exists');
+    } else if (res.statusCode == 400) {
+      throw AuthException(message);
+    } else {
+      throw AuthException(message);
+    }
+  }
+
+  /// Simple register that returns user map or null (backward compat)
   Future<Map<String, dynamic>?> register({
     required String name,
     required String email,
@@ -80,30 +215,27 @@ class ApiService {
     String? school,
   }) async {
     try {
-      final res = await http.post(
-        Uri.parse('$baseUrl/api/v1/auth/register'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'name': name,
-          'email': email,
-          'password': password,
-          'phone': phone,
-          'class_name': className,
-          'school_name': school,
-          'platform': 'mobile',
-        }),
-      ).timeout(const Duration(seconds: 10));
-
-      final data = jsonDecode(res.body);
-      if (res.statusCode == 201 && data['success'] == true) {
-        await _saveTokens(data['data']['token'], data['data']['refreshToken']);
-        return data['data']['user'];
-      }
-      return null;
+      return await registerWithDetails(
+        name: name,
+        email: email,
+        password: password,
+        phone: phone,
+        className: className,
+        school: school,
+      );
     } catch (e) {
       print('❌ Register error: $e');
       return null;
     }
+  }
+
+  /// Change password via authenticated API call
+  Future<bool> changePassword(String currentPassword, String newPassword) async {
+    final res = await _postRaw('/api/v1/auth/change-password', {
+      'currentPassword': currentPassword,
+      'newPassword': newPassword,
+    });
+    return res != null && res.statusCode == 200;
   }
 
   Future<Map<String, dynamic>?> getMe() async {
@@ -111,7 +243,9 @@ class ApiService {
   }
 
   Future<void> logout() async {
-    await _post('/api/v1/auth/logout', {});
+    try {
+      await _post('/api/v1/auth/logout', {});
+    } catch (_) {}
     await clearTokens();
   }
 
@@ -272,6 +406,27 @@ class ApiService {
     }
   }
 
+  Future<http.Response?> _postRaw(String path, Map<String, dynamic> body) async {
+    try {
+      final res = await http.post(
+        Uri.parse('$baseUrl$path'),
+        headers: _headers,
+        body: jsonEncode(body),
+      ).timeout(const Duration(seconds: 10));
+
+      if (res.statusCode == 401) {
+        final refreshed = await _refreshAccessToken();
+        if (refreshed) return _postRaw(path, body);
+        return null;
+      }
+
+      return res;
+    } catch (e) {
+      print('❌ POST $path error: $e');
+      return null;
+    }
+  }
+
   Future<Map<String, dynamic>?> _put(String path, Map<String, dynamic> body) async {
     try {
       final res = await http.put(
@@ -322,4 +477,13 @@ class ApiService {
     await clearTokens();
     return false;
   }
+}
+
+/// Custom exception for authentication errors with user-friendly messages
+class AuthException implements Exception {
+  final String message;
+  AuthException(this.message);
+
+  @override
+  String toString() => message;
 }
