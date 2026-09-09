@@ -93,17 +93,7 @@ function CheckoutPageInner() {
   const grandTotal = afterCoupon;
   const savings = plan.originalPrice - afterCoupon;
 
-  /* â"€â"€ countdown timer â"€â"€ */
-  const [timeLeft, setTimeLeft] = useState(3600);
-  useEffect(() => {
-    const t = setInterval(() => setTimeLeft(p => Math.max(0, p - 1)), 1000);
-    return () => clearInterval(t);
-  }, []);
-  const hh = String(Math.floor(timeLeft / 3600)).padStart(2, '0');
-  const mm = String(Math.floor((timeLeft % 3600) / 60)).padStart(2, '0');
-  const ss = String(timeLeft % 60).padStart(2, '0');
-
-  /* â"€â"€ validate step 1 â"€â"€ */
+  /* validate step 1 */
   const validate = () => {
     const e: Record<string, string> = {};
     if (!name.trim()) e.name = 'Full name is required';
@@ -451,10 +441,6 @@ function CheckoutPageInner() {
               <span className="hidden sm:inline">20,000+ Students Joined</span>
               <span className="hidden sm:block">|</span>
               <span className="hidden sm:inline"> 4.9 Rating</span>
-            </div>
-            <div className="flex items-center gap-2 text-white text-xs font-bold">
-              <span>Offer ends in:</span>
-              <span className="bg-white/20 rounded-lg px-2 py-1 font-mono">{hh}:{mm}:{ss}</span>
             </div>
           </div>
         </div>

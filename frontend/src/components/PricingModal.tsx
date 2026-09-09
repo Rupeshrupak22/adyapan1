@@ -44,21 +44,6 @@ export default function PricingModal({ isOpen, onClose }: PricingModalProps) {
   const [pendingPlan, setPendingPlan] = useState<(typeof plans)[0] | null>(null);
   const [checking, setChecking] = useState(false);
 
-  // Countdown timer — 24 hours from when modal first opens
-  const [timeLeft, setTimeLeft] = useState({ h: 23, m: 59, s: 59 });
-  useEffect(() => {
-    if (!isOpen) return;
-    const interval = setInterval(() => {
-      setTimeLeft(prev => {
-        if (prev.s > 0) return { ...prev, s: prev.s - 1 };
-        if (prev.m > 0) return { ...prev, m: prev.m - 1, s: 59 };
-        if (prev.h > 0) return { h: prev.h - 1, m: 59, s: 59 };
-        return { h: 0, m: 0, s: 0 };
-      });
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [isOpen]);
-
   const fmt2 = (n: number) => String(n).padStart(2, '0');
 
   /* Lock body scroll while open */
@@ -165,13 +150,6 @@ export default function PricingModal({ isOpen, onClose }: PricingModalProps) {
                   <h2 className="text-lg font-bold text-gray-900 sm:text-xl lg:text-2xl">
                     Choose Your Growth Plan
                   </h2>
-                  {/* Countdown timer */}
-                  <div className="mt-2 inline-flex items-center gap-2 rounded-xl bg-gray-900 px-4 py-2 text-white">
-                    <span className="text-xs text-gray-400 font-medium">⏰ Offer ends in</span>
-                    <span className="font-mono font-bold text-sm text-orange-400">
-                      {fmt2(timeLeft.h)}:{fmt2(timeLeft.m)}:{fmt2(timeLeft.s)}
-                    </span>
-                  </div>
                 </div>
 
                 {/* Plans grid: 1 col mobile → 2 col sm → 4 col md */}
