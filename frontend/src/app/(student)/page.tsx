@@ -1,18 +1,7 @@
 import type { Metadata } from 'next';
-import dynamic from 'next/dynamic';
 import { websiteSchema, organizationSchema, faqSchema, BASE_URL } from '@/lib/seo';
 import JsonLd from '@/components/JsonLd';
-// Above-the-fold: static imports (render immediately)
-import HeroSection from '@/components/HeroSection';
-import MarqueeBanner from '@/components/MarqueeBanner';
-// Below-the-fold: dynamic imports (lazy-loaded after initial paint)
-const CommunityShowcaseSection  = dynamic(() => import('@/components/CommunityShowcaseSection'));
-const HowItWorksSection         = dynamic(() => import('@/components/HowItWorksSection'));
-const AddOnsSection             = dynamic(() => import('@/components/AddOnsSection'));
-const TestimonialsSection       = dynamic(() => import('@/components/TestimonialsSection'));
-const CertificationsSection     = dynamic(() => import('@/components/CertificationsSection'));
-const CertificateShowcaseSection = dynamic(() => import('@/components/CertificateShowcaseSection'));
-const GlobalCertificationPartners = dynamic(() => import('@/components/GlobalCertificationPartners'));
+import HomeSections from './HomeSections';
 
 // Homepage metadata is inherited from root layout - override with page-specific values
 export const metadata: Metadata = {
@@ -56,19 +45,7 @@ export default function Home() {
       <JsonLd schema={websiteSchema()} />
       <JsonLd schema={organizationSchema()} />
       <JsonLd schema={homeFaq} />
-      <div className="flex flex-col">
-        <HeroSection />
-        <MarqueeBanner variant="dark" speed={28} />
-        <CommunityShowcaseSection />
-        <HowItWorksSection />
-        <AddOnsSection />
-        <MarqueeBanner variant="orange" speed={32} />
-        <TestimonialsSection />
-        <CertificationsSection />
-        <MarqueeBanner variant="glass" speed={26} />
-        <CertificateShowcaseSection />
-        <GlobalCertificationPartners />
-      </div>
+      <HomeSections />
     </>
   );
 }

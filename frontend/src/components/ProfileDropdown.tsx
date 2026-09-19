@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -40,6 +41,15 @@ const ICONS = {
   camera:      'M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z M15 13a3 3 0 11-6 0 3 3 0 016 0z',
   close:       'M6 18L18 6M6 6l12 12',
 };
+
+/* â"€â"€ Portal â€" renders children into document.body so `position: fixed`
+   escapes any transformed/blurred ancestor (e.g. the sticky navbar). â"€â"€ */
+function Portal({ children }: { children: React.ReactNode }) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); return () => setMounted(false); }, []);
+  if (!mounted) return null;
+  return createPortal(children, document.body);
+}
 
 /* â"€â"€ Edit Profile Modal â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */
 function EditProfileModal({
@@ -95,7 +105,10 @@ function EditProfileModal({
   const initials = name ? name.split(' ').map((w: string) => w[0]).join('').toUpperCase().slice(0, 2) : '?';
 
   return (
-    <div className="fixed inset-0 z-[9999] overflow-y-auto" style={{ margin: 0 }}>
+    <div
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 overflow-y-auto"
+      style={{ margin: 0 }}
+    >
       {/* Backdrop */}
       <motion.div
         initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
@@ -103,16 +116,15 @@ function EditProfileModal({
         onClick={onClose}
       />
 
-      <div className="relative min-h-full flex items-center justify-center p-4">
-        {/* Modal card */}
-        <motion.div
-          initial={{ opacity: 0, scale: 0.92, y: 20 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.92, y: 20 }}
-          transition={{ type: 'spring', stiffness: 300, damping: 28 }}
-          className="relative w-full max-w-md rounded-3xl bg-white shadow-2xl overflow-hidden"
-          onClick={e => e.stopPropagation()}
-        >
+      {/* Modal card */}
+      <motion.div
+        initial={{ opacity: 0, scale: 0.92, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.92, y: 20 }}
+        transition={{ type: 'spring', stiffness: 300, damping: 28 }}
+        className="relative z-10 w-full max-w-md rounded-3xl bg-white shadow-2xl overflow-hidden my-auto"
+        onClick={e => e.stopPropagation()}
+      >
         {/* Header */}
         <div className="bg-gradient-to-r from-[#ffa800] to-[#ff8c00] px-6 py-5 flex items-center justify-between">
           <h2 className="text-lg font-bold text-white">Edit Profile</h2>
@@ -199,7 +211,6 @@ function EditProfileModal({
           </div>
         </form>
       </motion.div>
-      </div>
     </div>
   );
 }
@@ -538,22 +549,26 @@ export default function ProfileDropdown({ user, onUserUpdate }: Props) {
       </div>
 
       {/* â"€â"€ Modals â"€â"€ */}
-      <AnimatePresence>
-        {showEditModal && (
-          <EditProfileModal
-            user={user}
-            onClose={() => setShowEditModal(false)}
-            onSave={(updated) => {
-              onUserUpdate(updated);
-              window.dispatchEvent(new Event('auth-change'));
-            }}
-          />
-        )}
-      </AnimatePresence>
+      <Portal>
+        <AnimatePresence>
+          {showEditModal && (
+            <EditProfileModal
+              user={user}
+              onClose={() => setShowEditModal(false)}
+              onSave={(updated) => {
+                onUserUpdate(updated);
+                window.dispatchEvent(new Event('auth-change'));
+              }}
+            />
+          )}
+        </AnimatePresence>
+      </Portal>
 
-      <AnimatePresence>
-        {showCourses && <PurchasedCoursesModal onClose={() => setShowCourses(false)} />}
-      </AnimatePresence>
+      <Portal>
+        <AnimatePresence>
+          {showCourses && <PurchasedCoursesModal onClose={() => setShowCourses(false)} />}
+        </AnimatePresence>
+      </Portal>
     </>
   );
 }

@@ -27,6 +27,32 @@ const securityHeaders = [
   ] : []),
 ];
 
+// Polyfill localStorage on server to prevent crashes.
+// Newer Node versions ship an experimental built-in `localStorage` that
+// requires `--localstorage-file`; without it, its methods throw. So we
+// override whenever a working `getItem` is not present.
+if (typeof global !== 'undefined' &&
+    (typeof global.localStorage === 'undefined' ||
+     typeof global.localStorage.getItem !== 'function')) {
+  const noopStorage = {
+    getItem: () => null,
+    setItem: () => {},
+    removeItem: () => {},
+    clear: () => {},
+    key: () => null,
+    length: 0,
+  };
+  try {
+    Object.defineProperty(global, 'localStorage', {
+      value: noopStorage,
+      writable: true,
+      configurable: true,
+    });
+  } catch {
+    global.localStorage = noopStorage;
+  }
+}
+
 const nextConfig = {
   // ─── Core ────────────────────────────────────────────────────────────────
   reactStrictMode: true,
