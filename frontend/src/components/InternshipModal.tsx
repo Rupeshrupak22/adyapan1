@@ -3,6 +3,10 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, CheckCircle, Loader2 } from 'lucide-react';
+import EmailField from '@/components/forms/EmailField';
+import PhoneField from '@/components/forms/PhoneField';
+import { isIndianMobile, INDIAN_MOBILE_MESSAGE } from '@/lib/phone';
+import { isValidEmail, EMAIL_FORMAT_MESSAGE } from '@/lib/email-format';
 
 interface Props {
   isOpen: boolean;
@@ -23,20 +27,18 @@ export default function InternshipModal({ isOpen, onClose }: Props) {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    // Mobile: only digits, max 10
-    if (name === 'mobile') {
-      const digits = value.replace(/\D/g, '').slice(0, 10);
-      setForm(prev => ({ ...prev, mobile: digits }));
-    } else {
-      setForm(prev => ({ ...prev, [name]: value }));
-    }
+    setForm(prev => ({ ...prev, [name]: value }));
     setErrorMsg('');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (form.mobile.length !== 10) {
-      setErrorMsg('Mobile number must be exactly 10 digits.');
+    if (!isValidEmail(form.email)) {
+      setErrorMsg(EMAIL_FORMAT_MESSAGE);
+      return;
+    }
+    if (!isIndianMobile(form.mobile)) {
+      setErrorMsg(INDIAN_MOBILE_MESSAGE);
       return;
     }
     setStatus('loading');
@@ -185,43 +187,25 @@ export default function InternshipModal({ isOpen, onClose }: Props) {
                     </div>
 
                     {/* Email */}
-                    <div>
-                      <label className="block text-xs font-semibold text-gray-600 mb-1.5">
-                        Email Address <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="email"
-                        name="email"
-                        required
-                        value={form.email}
-                        onChange={handleChange}
-                        placeholder="you@email.com"
-                        className={inp}
-                      />
-                    </div>
+                    <EmailField
+                      label="Email Address"
+                      email={form.email}
+                      onEmailChange={(v) => setForm(prev => ({ ...prev, email: v }))}
+                      placeholder="you@email.com"
+                      inputClassName={inp}
+                      labelClassName="block text-xs font-semibold text-gray-600 mb-1.5"
+                    />
 
                     {/* Mobile */}
-                    <div>
-                      <label className="block text-xs font-semibold text-gray-600 mb-1.5">
-                        Mobile Number <span className="text-red-500">*</span>
-                      </label>
-                      <div className="flex gap-2">
-                        <span className="rounded-xl border border-gray-200 px-3 py-3 text-sm bg-gray-50 text-gray-600 shrink-0">+91</span>
-                        <input
-                          type="tel"
-                          name="mobile"
-                          required
-                          value={form.mobile}
-                          onChange={handleChange}
-                          placeholder="10-digit mobile number"
-                          maxLength={10}
-                          className={inp}
-                        />
-                      </div>
-                      {form.mobile.length > 0 && form.mobile.length < 10 && (
-                        <p className="text-xs text-red-500 mt-1">{10 - form.mobile.length} more digits needed</p>
-                      )}
-                    </div>
+                    <PhoneField
+                      label="Mobile Number"
+                      name="mobile"
+                      value={form.mobile}
+                      onChange={(digits) => setForm(prev => ({ ...prev, mobile: digits }))}
+                      placeholder="10-digit mobile number"
+                      inputClassName={inp}
+                      labelClassName="block text-xs font-semibold text-gray-600 mb-1.5"
+                    />
 
                     {/* Submit */}
                     <motion.button

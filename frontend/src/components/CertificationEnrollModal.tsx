@@ -3,6 +3,10 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Send, Phone, CheckCircle, Loader2, CalendarDays } from 'lucide-react';
+import EmailField from '@/components/forms/EmailField';
+import PhoneField from '@/components/forms/PhoneField';
+import { isIndianMobile, INDIAN_MOBILE_MESSAGE } from '@/lib/phone';
+import { isValidEmail, EMAIL_FORMAT_MESSAGE } from '@/lib/email-format';
 
 interface Props {
   isOpen: boolean;
@@ -35,6 +39,16 @@ export default function CertificationEnrollModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isValidEmail(form.email)) {
+      setErrorMsg(EMAIL_FORMAT_MESSAGE);
+      setStatus('error');
+      return;
+    }
+    if (!isIndianMobile(form.phone)) {
+      setErrorMsg(INDIAN_MOBILE_MESSAGE);
+      setStatus('error');
+      return;
+    }
     setStatus('loading');
     setErrorMsg('');
 
@@ -50,7 +64,8 @@ export default function CertificationEnrollModal({
       });
 
       if (!res.ok) {
-        setErrorMsg('Something went wrong. Please try again.');
+        const data = await res.json().catch(() => ({}));
+        setErrorMsg(data.error || 'Something went wrong. Please try again.');
         setStatus('error');
         return;
       }
@@ -184,28 +199,27 @@ export default function CertificationEnrollModal({
                           placeholder="Enter your full name" required className={inp}
                         />
                       </div>
-                      <div>
-                        <label className="block text-xs font-bold text-gray-600 mb-1.5">
-                          Phone <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          name="phone" value={form.phone} onChange={handleChange}
-                          placeholder="Enter your phone number" required type="tel" className={inp}
-                        />
-                      </div>
+                      <PhoneField
+                        label="Phone"
+                        name="phone"
+                        value={form.phone}
+                        onChange={(digits) => setForm((prev) => ({ ...prev, phone: digits }))}
+                        placeholder="10-digit mobile number"
+                        inputClassName={inp}
+                        labelClassName="block text-xs font-bold text-gray-600 mb-1.5"
+                      />
                     </div>
 
                     {/* Email + College */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-xs font-bold text-gray-600 mb-1.5">
-                          Email <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          name="email" value={form.email} onChange={handleChange}
-                          placeholder="Enter your email address" required type="email" className={inp}
-                        />
-                      </div>
+                      <EmailField
+                        label="Email"
+                        email={form.email}
+                        onEmailChange={(v) => setForm((prev) => ({ ...prev, email: v }))}
+                        placeholder="Enter your email address"
+                        inputClassName={inp}
+                        labelClassName="block text-xs font-bold text-gray-600 mb-1.5"
+                      />
                       <div>
                         <label className="block text-xs font-bold text-gray-600 mb-1.5">
                           College

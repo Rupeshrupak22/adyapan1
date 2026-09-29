@@ -36,6 +36,10 @@ import {
   X,
   MessageCircle,
 } from 'lucide-react';
+import EmailField from '@/components/forms/EmailField';
+import PhoneField from '@/components/forms/PhoneField';
+import { isIndianMobile, INDIAN_MOBILE_MESSAGE } from '@/lib/phone';
+import { isValidEmail, EMAIL_FORMAT_MESSAGE } from '@/lib/email-format';
 
 /* â"€â"€ Counselor contact details â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */
 const COUNSELOR_PHONE = '8179124566';
@@ -380,6 +384,16 @@ export default function OfflineServicesPage() {
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+
+    if (!isValidEmail(form.email)) {
+      setToast({ type: 'error', message: EMAIL_FORMAT_MESSAGE });
+      return;
+    }
+    if (!isIndianMobile(form.phone)) {
+      setToast({ type: 'error', message: INDIAN_MOBILE_MESSAGE });
+      return;
+    }
+
     setLoading(true);
     setToast(null);
 
@@ -727,12 +741,9 @@ export default function OfflineServicesPage() {
             <div className="grid gap-4 sm:grid-cols-2">
               {[
                 { name: 'name', label: 'Name', type: 'text', required: true },
-                { name: 'phone', label: 'Phone', type: 'tel', required: true },
-                { name: 'email', label: 'Email', type: 'email', required: true },
                 { name: 'college', label: 'College', type: 'text', required: false },
-                { name: 'city', label: 'City', type: 'text', required: false },
               ].map((field) => (
-                <label key={field.name} className={field.name === 'city' ? 'sm:col-span-2' : ''}>
+                <label key={field.name}>
                   <span className="mb-2 block text-sm font-bold text-gray-700">{field.label}</span>
                   <input
                     name={field.name}
@@ -745,6 +756,37 @@ export default function OfflineServicesPage() {
                   />
                 </label>
               ))}
+
+              <PhoneField
+                label="Phone"
+                name="phone"
+                value={form.phone}
+                onChange={(digits) => setForm((prev) => ({ ...prev, phone: digits }))}
+                placeholder="10-digit mobile number"
+                inputClassName="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm font-semibold text-[#111827] outline-none transition focus:border-orange-400 focus:bg-white focus:ring-4 focus:ring-orange-100"
+                labelClassName="mb-2 block text-sm font-bold text-gray-700"
+              />
+
+              <EmailField
+                label="Email"
+                email={form.email}
+                onEmailChange={(v) => setForm((prev) => ({ ...prev, email: v }))}
+                placeholder="Enter your email address"
+                inputClassName="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm font-semibold text-[#111827] outline-none transition focus:border-orange-400 focus:bg-white focus:ring-4 focus:ring-orange-100"
+                labelClassName="mb-2 block text-sm font-bold text-gray-700"
+              />
+
+              <label className="sm:col-span-2">
+                <span className="mb-2 block text-sm font-bold text-gray-700">City</span>
+                <input
+                  name="city"
+                  type="text"
+                  value={form.city}
+                  onChange={(event) => setForm((prev) => ({ ...prev, city: event.target.value }))}
+                  suppressHydrationWarning
+                  className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm font-semibold text-[#111827] outline-none transition focus:border-orange-400 focus:bg-white focus:ring-4 focus:ring-orange-100"
+                />
+              </label>
 
               <label>
                 <span className="mb-2 block text-sm font-bold text-gray-700">Course Interest</span>

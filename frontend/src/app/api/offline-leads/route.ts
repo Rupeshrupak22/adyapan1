@@ -6,8 +6,10 @@ import {
   getClientIp,
   isRateLimited,
   isSpamSubmission,
+  isIndianMobile,
+  indianMobileMessage,
   normalizeEmail,
-  normalizePhone,
+  normalizeIndianMobile,
   rateLimitResponse,
   sanitizeMongoInput,
   verifyTurnstileToken,
@@ -47,7 +49,7 @@ export async function POST(req: NextRequest) {
     }
 
     const name = clean(body.name);
-    const phone = normalizePhone(body.phone);
+    const phone = normalizeIndianMobile(body.phone);
     const email = normalizeEmail(body.email);
     const college = clean(body.college);
     const city = clean(body.city);
@@ -68,9 +70,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (!/^\d{10}$/.test(phone.replace(/\s/g, ''))) {
+    if (!isIndianMobile(phone)) {
       return NextResponse.json(
-        { error: 'Please enter a valid 10-digit phone number.' },
+        { error: indianMobileMessage() },
         { status: 400 }
       );
     }

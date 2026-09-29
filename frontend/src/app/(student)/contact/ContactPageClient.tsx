@@ -2,6 +2,10 @@
 
 import { useState } from 'react';
 import { Phone, Mail, Send, CheckCircle, Clock, Instagram, Linkedin, ChevronDown } from 'lucide-react';
+import EmailField from '@/components/forms/EmailField';
+import PhoneField from '@/components/forms/PhoneField';
+import { isIndianMobile, INDIAN_MOBILE_MESSAGE } from '@/lib/phone';
+import { isValidEmail, EMAIL_FORMAT_MESSAGE } from '@/lib/email-format';
 
 const CONTACT_INFO = [
   { icon: Phone, label: 'Phone', value: '+91 81791 24566', href: 'tel:+918179124566', color: 'from-green-500 to-emerald-600' },
@@ -24,6 +28,7 @@ const FAQS = [
 export default function ContactPageClient() {
   const [form, setForm] = useState({ name: '', email: '', phone: '', subject: '', message: '' });
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [errorMsg, setErrorMsg] = useState('');
   const [openFaq, setOpenFaq] = useState<number | null>(null);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -32,7 +37,18 @@ export default function ContactPageClient() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isValidEmail(form.email)) {
+      setErrorMsg(EMAIL_FORMAT_MESSAGE);
+      setStatus('error');
+      return;
+    }
+    if (!isIndianMobile(form.phone)) {
+      setErrorMsg(INDIAN_MOBILE_MESSAGE);
+      setStatus('error');
+      return;
+    }
     setStatus('loading');
+    setErrorMsg('');
     try {
       const res = await fetch('/api/contact', {
         method: 'POST',
@@ -43,9 +59,12 @@ export default function ContactPageClient() {
         setStatus('success');
         setForm({ name: '', email: '', phone: '', subject: '', message: '' });
       } else {
+        const data = await res.json().catch(() => ({}));
+        setErrorMsg(data.error || 'Something went wrong. Please try again.');
         setStatus('error');
       }
     } catch {
+      setErrorMsg('Something went wrong. Please try again.');
       setStatus('error');
     }
   };
@@ -130,33 +149,26 @@ export default function ContactPageClient() {
                       className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-[#ffa800] focus:bg-white transition-colors"
                     />
                   </div>
-                  <div>
-                    <label className="block text-xs font-bold text-gray-700 uppercase mb-1.5">Email Address *</label>
-                    <input
-                      type="email"
-                      name="email"
-                      required
-                      value={form.email}
-                      onChange={handleChange}
-                      placeholder="john@example.com"
-                      className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-[#ffa800] focus:bg-white transition-colors"
-                    />
-                  </div>
+                  <EmailField
+                    label="EMAIL ADDRESS"
+                    email={form.email}
+                    onEmailChange={(v) => setForm((prev) => ({ ...prev, email: v }))}
+                    placeholder="john@example.com"
+                    inputClassName="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-[#ffa800] focus:bg-white transition-colors"
+                    labelClassName="block text-xs font-bold text-gray-700 uppercase mb-1.5"
+                  />
                 </div>
 
                 <div className="grid sm:grid-cols-2 gap-5">
-                  <div>
-                    <label className="block text-xs font-bold text-gray-700 uppercase mb-1.5">Phone Number *</label>
-                    <input
-                      type="tel"
-                      name="phone"
-                      required
-                      value={form.phone}
-                      onChange={handleChange}
-                      placeholder="+91 98765 43210"
-                      className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-[#ffa800] focus:bg-white transition-colors"
-                    />
-                  </div>
+                  <PhoneField
+                    label="PHONE NUMBER"
+                    name="phone"
+                    value={form.phone}
+                    onChange={(digits) => setForm((prev) => ({ ...prev, phone: digits }))}
+                    placeholder="10-digit mobile number"
+                    inputClassName="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-[#ffa800] focus:bg-white transition-colors"
+                    labelClassName="block text-xs font-bold text-gray-700 uppercase mb-1.5"
+                  />
                   <div>
                     <label className="block text-xs font-bold text-gray-700 uppercase mb-1.5">Subject</label>
                     <select
@@ -188,7 +200,7 @@ export default function ContactPageClient() {
                 </div>
 
                 {status === 'error' && (
-                  <p className="text-red-500 text-xs font-semibold">Something went wrong. Please try again.</p>
+                  <p className="text-red-500 text-xs font-semibold">{errorMsg || 'Something went wrong. Please try again.'}</p>
                 )}
 
                 <button

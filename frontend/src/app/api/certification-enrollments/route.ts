@@ -2,12 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { connectToDatabase } from '@/lib/mongodb';
 import { sendLeadNotificationEmails } from '@/lib/resend';
-import { isStrictEmail, strictEmailMessage } from '@/lib/security';
+import { isStrictEmail, strictEmailMessage, isIndianMobile, indianMobileMessage } from '@/lib/security';
 import CertificationEnrollment from '@/models/CertificationEnrollment';
 
 const EnrollSchema = z.object({
   name: z.string().min(2, 'Name is required').max(100).transform((v) => v.trim()),
-  phone: z.string().min(6, 'Phone is required').max(20).transform((v) => v.trim()),
+  phone: z.string().refine(isIndianMobile, indianMobileMessage()),
   email: z.string().refine(isStrictEmail, strictEmailMessage()).transform((v) => v.toLowerCase().trim()),
   college: z.string().max(200).optional().default('').transform((v) => v?.trim() ?? ''),
   city: z.string().max(100).optional().default('').transform((v) => v?.trim() ?? ''),

@@ -98,6 +98,31 @@ export function normalizePhone(value: unknown): string {
   return cleanText(value, 20).replace(/[^\d+]/g, '');
 }
 
+/**
+ * Extracts the 10-digit Indian mobile number from any input.
+ * Strips spaces, dashes, +91 / 0091 / leading 0 prefixes.
+ * Returns the 10 digit core (or whatever digits remain, for validation to reject).
+ */
+export function normalizeIndianMobile(value: unknown): string {
+  let digits = String(value ?? '').replace(/\D/g, '');
+  // Strip common India prefixes: 91 (country code) or leading 0
+  if (digits.length === 12 && digits.startsWith('91')) digits = digits.slice(2);
+  else if (digits.length === 11 && digits.startsWith('0')) digits = digits.slice(1);
+  return digits;
+}
+
+/**
+ * Valid Indian mobile: exactly 10 digits, first digit between 6 and 9.
+ */
+export function isIndianMobile(value: unknown): boolean {
+  const digits = normalizeIndianMobile(value);
+  return /^[6-9]\d{9}$/.test(digits);
+}
+
+export function indianMobileMessage() {
+  return 'Enter a valid 10-digit Indian mobile number starting with 6, 7, 8 or 9.';
+}
+
 export function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }

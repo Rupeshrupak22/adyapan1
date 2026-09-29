@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { connectToDatabase } from '@/lib/mongodb';
 import InternLead from '@/models/InternLead';
 import { sendLeadNotificationEmails } from '@/lib/resend';
+import { isIndianMobile, indianMobileMessage } from '@/lib/security';
 
 const InternLeadSchema = z.object({
   name: z.string().min(2, 'Name is required').max(100).transform(v => v.trim()),
@@ -10,7 +11,7 @@ const InternLeadSchema = z.object({
   email: z.string().email('Invalid email address').transform(v => v.toLowerCase().trim()),
   mobile: z
     .string()
-    .regex(/^\d{10}$/, 'Mobile number must be exactly 10 digits'),
+    .refine(isIndianMobile, indianMobileMessage()),
 });
 
 export async function POST(req: NextRequest) {
