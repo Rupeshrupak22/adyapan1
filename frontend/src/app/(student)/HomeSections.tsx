@@ -5,6 +5,8 @@ import dynamic from 'next/dynamic';
 // Above-the-fold: client-only (avoid SSR localStorage issues)
 const HeroSection    = dynamic(() => import('@/components/HeroSection'),    { ssr: false });
 const MarqueeBanner  = dynamic(() => import('@/components/MarqueeBanner'),  { ssr: false });
+// Mascot only on the landing/home page (fixed-position, decorative).
+const Mascot         = dynamic(() => import('@/components/Mascot'),         { ssr: false });
 // Below-the-fold: lazy-loaded after initial paint
 const CommunityShowcaseSection    = dynamic(() => import('@/components/CommunityShowcaseSection'));
 const HowItWorksSection           = dynamic(() => import('@/components/HowItWorksSection'));
@@ -16,18 +18,21 @@ const GlobalCertificationPartners = dynamic(() => import('@/components/GlobalCer
 
 export default function HomeSections() {
   return (
-    <div className="flex flex-col">
-      <HeroSection />
-      <MarqueeBanner variant="dark" speed={28} />
-      <CommunityShowcaseSection />
-      <HowItWorksSection />
-      <AddOnsSection />
-      <MarqueeBanner variant="orange" speed={32} />
-      <TestimonialsSection />
-      <CertificationsSection />
-      <MarqueeBanner variant="glass" speed={26} />
-      <CertificateShowcaseSection />
-      <GlobalCertificationPartners />
-    </div>
+    <>
+      <div className="flex flex-col">
+        <HeroSection />
+        <MarqueeBanner variant="dark" speed={28} />
+        <CommunityShowcaseSection />
+        <HowItWorksSection />
+        <AddOnsSection />
+        <MarqueeBanner variant="orange" speed={32} />
+        <TestimonialsSection />
+        <CertificationsSection />
+        <MarqueeBanner variant="glass" speed={26} />
+        <CertificateShowcaseSection />
+        <GlobalCertificationPartners />
+      </div>
+      <Mascot />
+    </>
   );
 }

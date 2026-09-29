@@ -179,7 +179,7 @@ const HowItWorksSection = () => {
               loop
               muted={isMuted}
               playsInline
-              preload="auto"
+              preload="metadata"
               onCanPlay={() => {
                 if (videoRef.current && !document.hidden) {
                   videoRef.current.play()

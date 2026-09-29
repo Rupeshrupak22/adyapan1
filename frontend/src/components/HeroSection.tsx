@@ -160,7 +160,8 @@ function HeroSection() {
     <>
     <section ref={sectionRef} className="relative overflow-hidden" style={{ minHeight: '92vh' }}>
 
-      {/* Full background video */}
+      {/* Full background video (autoplay hero). preload=metadata avoids forcing
+          a full eager download; the browser streams as it plays. */}
       <video
         ref={videoRef}
         src={s3Url('/videos/8126367-hd_1920_1080_25fps.mp4')}
@@ -168,12 +169,10 @@ function HeroSection() {
         muted
         loop
         playsInline
-        preload="auto"
+        preload="metadata"
         className="absolute inset-0 w-full h-full object-cover pointer-events-none"
         style={{ zIndex: 0 }}
-      >
-        <source src={s3Url('/videos/8126367-hd_1920_1080_25fps.mp4')} type="video/mp4" />
-      </video>
+      />
 
       {/* Overlay */}
       <div className="absolute inset-0 pointer-events-none" style={{

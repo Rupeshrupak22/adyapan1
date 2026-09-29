@@ -73,7 +73,12 @@ const nextConfig = {
   ],
 
   // ─── Image optimisation ──────────────────────────────────────────────────
+  // Set NEXT_PUBLIC_DISABLE_IMAGE_OPTIMIZATION=true to serve images straight
+  // from the source/CDN and bypass Vercel's image optimizer entirely (zero
+  // image-optimization Fast Data Transfer). Defaults to optimizer ON so
+  // behaviour is unchanged unless you opt in.
   images: {
+    unoptimized: process.env.NEXT_PUBLIC_DISABLE_IMAGE_OPTIMIZATION === 'true',
     remotePatterns: [
       { protocol: 'https', hostname: 'images.unsplash.com',    pathname: '/**' },
       { protocol: 'https', hostname: 'api.qrserver.com',       pathname: '/**' },
@@ -125,6 +130,14 @@ const nextConfig = {
       },
       {
         source: '/images/(.*)',
+        headers: [
+          { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' },
+        ],
+      },
+      // Mascot assets (served locally only as a fallback). Long-lived cache so
+      // repeat visits don't re-download them from Vercel.
+      {
+        source: '/mascot/(.*)',
         headers: [
           { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' },
         ],

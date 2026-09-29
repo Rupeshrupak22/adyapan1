@@ -13,12 +13,10 @@ export default function CampusAmbassadorPage() {
       <section className="relative pt-16 pb-24 sm:pb-32 px-6 overflow-hidden">
         <video
           src={s3Url('/videos/7969486-uhd_3840_2160_30fps.mp4')}
-          autoPlay muted loop playsInline preload="auto"
+          autoPlay muted loop playsInline preload="metadata"
           className="absolute inset-0 w-full h-full object-cover"
           style={{ zIndex: 0 }}
-        >
-          <source src={s3Url('/videos/7969486-uhd_3840_2160_30fps.mp4')} type="video/mp4" />
-        </video>
+        />
         <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/40 to-black/70" style={{ zIndex: 1 }} />
 
         <div className="relative z-10 max-w-6xl mx-auto text-center">

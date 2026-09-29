@@ -9,7 +9,8 @@ import { AuthProvider } from '@/context/AuthContext';
 const AnimatedBackground = dynamic(() => import('@/components/AnimatedBackground'), { ssr: false });
 const WelcomePopup       = dynamic(() => import('@/components/WelcomePopup'),       { ssr: false });
 const CookieConsent      = dynamic(() => import('@/components/CookieConsent'),      { ssr: false });
-const Mascot             = dynamic(() => import('@/components/Mascot'),             { ssr: false });
+// Mascot is now mounted only on the landing/home page (see HomeSections.tsx),
+// not globally across every student page, to reduce bandwidth.
 const WhatsAppButton     = dynamic(() => import('@/components/WhatappButton'),      { ssr: false });
 
 export default function StudentLayout({ children }: { children: React.ReactNode }) {
@@ -21,7 +22,6 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
       <Footer />
       <WelcomePopup />
       <CookieConsent />
-      <Mascot />
       <WhatsAppButton />
     </AuthProvider>
   );

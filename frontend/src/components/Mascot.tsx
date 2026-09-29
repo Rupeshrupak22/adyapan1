@@ -1,6 +1,7 @@
 ﻿'use client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { getMediaUrl } from '@/lib/media';
 
 const KICK_DURATION_MS    = 1000;
 const KICK_RELEASE_MS     = 160;
@@ -8,11 +9,14 @@ const BALL_DIAMETER_RATIO = 0.19;
 const TOE_X               = 0.56;
 const TOE_Y               = 0.90;
 
+// Resolved through the centralized media helper so these heavy assets are
+// served from the external store/CDN (S3 by default) instead of Vercel /public.
+// If no media base is configured they fall back to the local /public path.
 const ASSETS = {
-  juggle:   '/mascot/assets/mascot_juggle.webm',
-  juggleMp4: '/mascot/assets/mascot_juggle.mp4',
-  kickPose: '/mascot/assets/mascot_kick.png',
-  ball:     '/mascot/assets/ball_logo.png.png',
+  juggle:    getMediaUrl('/mascot/assets/mascot_juggle.webm'),
+  juggleMp4: getMediaUrl('/mascot/assets/mascot_juggle.mp4'),
+  kickPose:  getMediaUrl('/mascot/assets/mascot_kick.png'),
+  ball:      getMediaUrl('/mascot/assets/ball_logo.png.png'),
 };
 
 const clamp   = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
@@ -214,14 +218,36 @@ export default function Mascot() {
     v.addEventListener('playing', startRenderLoop, { once: true });
   }, [startRenderLoop]);
 
-  /* â"€â"€ Pre-load kick pose + ball on mount â"€â"€ */
+  /* â"€â"€ Pre-load kick pose + ball, then video — deferred to browser idle â"€â"€
+     The mascot is decorative, so we defer its heavy assets (2.5MB webm etc.)
+     until the browser is idle. This keeps them off the critical path so they
+     don't compete with above-the-fold content, without changing behaviour. */
   useEffect(() => {
-    loadVideo();
-    getKickPoseCanvas();
-    getBallCanvas();
+    let idleId: number | undefined;
+    let started = false;
+
+    const start = () => {
+      if (started) return;
+      started = true;
+      loadVideo();
+      getKickPoseCanvas();
+      getBallCanvas();
+    };
+
+    const w = window as any;
+    if (typeof w.requestIdleCallback === 'function') {
+      idleId = w.requestIdleCallback(start, { timeout: 2500 });
+    } else {
+      idleId = window.setTimeout(start, 1200) as unknown as number;
+    }
+
     const t = setTimeout(() => setMounted(true), 500);
     return () => {
       clearTimeout(t);
+      if (idleId !== undefined) {
+        if (typeof w.cancelIdleCallback === 'function') w.cancelIdleCallback(idleId);
+        else clearTimeout(idleId);
+      }
       cancelAnimationFrame(rafRef.current);
       // Also cancel requestVideoFrameCallback if it was used
       if ((rafRef as any)._rvfcCancel) (rafRef as any)._rvfcCancel();
@@ -373,8 +399,9 @@ export default function Mascot() {
             transition:      'transform 180ms ease-out',
           }}
         >
-          {/* Hidden source video */}
-          <video ref={videoRef} crossOrigin="anonymous" playsInline muted loop style={{ display: 'none' }} />
+          {/* Hidden source video — preload none so the clip only downloads
+              when loadVideo() runs on idle, not eagerly on page load. */}
+          <video ref={videoRef} crossOrigin="anonymous" playsInline muted loop preload="none" style={{ display: 'none' }} />
 
           {/* Juggle canvas - white bg removed */}
           <canvas
