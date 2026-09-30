@@ -3,10 +3,13 @@ import { z } from 'zod';
 import { connectToDatabase } from '@/lib/mongodb';
 import InternLead from '@/models/InternLead';
 import { sendLeadNotificationEmails } from '@/lib/resend';
-import { isIndianMobile, indianMobileMessage } from '@/lib/security';
+import {
+  isIndianMobile, indianMobileMessage, isValidName, nameFormatMessage, normalizeName,
+  getClientIp, isRateLimited, rateLimitResponse, isSpamSubmission, sanitizeMongoInput,
+} from '@/lib/security';
 
 const InternLeadSchema = z.object({
-  name: z.string().min(2, 'Name is required').max(100).transform(v => v.trim()),
+  name: z.string().refine(isValidName, nameFormatMessage()).transform(normalizeName),
   courseName: z.string().min(2, 'Course name is required').max(200).transform(v => v.trim()),
   email: z.string().email('Invalid email address').transform(v => v.toLowerCase().trim()),
   mobile: z
@@ -15,9 +18,17 @@ const InternLeadSchema = z.object({
 });
 
 export async function POST(req: NextRequest) {
+  const ip = getClientIp(req);
+  if (isRateLimited(`intern-leads:${ip}`, 5, 15 * 60 * 1000)) {
+    return rateLimitResponse('Too many applications. Please try again later.');
+  }
+
   try {
-    const body = await req.json();
-    const data = InternLeadSchema.parse(body);
+    const rawBody = sanitizeMongoInput(await req.json()) as Record<string, unknown>;
+    if (isSpamSubmission(rawBody)) {
+      return NextResponse.json({ success: true });
+    }
+    const data = InternLeadSchema.parse(rawBody);
 
     await connectToDatabase();
 

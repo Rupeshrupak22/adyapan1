@@ -5,14 +5,31 @@ type RateLimitEntry = {
   resetAt: number;
 };
 
+// NOTE: This is an in-memory rate limiter. It is per-instance and does NOT
+// hold across serverless/Vercel lambda instances or after a cold start. It
+// provides basic abuse resistance but is not a substitute for an edge/WAF rate
+// limit (e.g. Cloudflare) or a shared store (Redis/Upstash) for strong limits.
 const buckets = new Map<string, RateLimitEntry>();
 const STRICT_EMAIL_REGEX = /^[A-Za-z0-9]+@[A-Za-z0-9]+(?:\.[A-Za-z0-9]+)+$/;
 
+/**
+ * Best-effort client IP.
+ *
+ * NOTE: x-forwarded-for / x-real-ip are client-controllable unless a trusted
+ * proxy (Cloudflare / Vercel) overwrites them. We PREFER cf-connecting-ip
+ * (set by Cloudflare and not forgeable by the client) and, when reading
+ * x-forwarded-for, take the LAST hop that the trusted proxy appended is not
+ * reliably knowable, so we still fall back to the first entry but keep this
+ * ordering so a spoofed header is less useful than a real edge-provided one.
+ */
 export function getClientIp(request: NextRequest): string {
-  return request.headers.get('cf-connecting-ip')
-    || request.headers.get('x-real-ip')
-    || request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
-    || 'unknown';
+  const cf = request.headers.get('cf-connecting-ip');
+  if (cf) return cf.trim();
+  const real = request.headers.get('x-real-ip');
+  if (real) return real.trim();
+  const xff = request.headers.get('x-forwarded-for');
+  if (xff) return xff.split(',')[0]?.trim() || 'unknown';
+  return 'unknown';
 }
 
 export function isRateLimited(key: string, limit: number, windowMs: number): boolean {
@@ -32,11 +49,18 @@ export function rateLimitResponse(message = 'Too many requests. Please try again
   return NextResponse.json({ error: message }, { status: 429 });
 }
 
-export function authCookieOptions(maxAge: number) {
+/**
+ * Cookie options for auth-related cookies.
+ * Defaults to sameSite='lax' because the OAuth flow (Google) relies on the
+ * state cookie surviving the cross-site redirect back from accounts.google.com,
+ * and 'strict' would drop it and break login. 'lax' already blocks the
+ * dangerous cross-site POST/CSRF vectors for cookie-based auth.
+ */
+export function authCookieOptions(maxAge: number, sameSite: 'lax' | 'strict' = 'lax') {
   return {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax' as const,
+    sameSite,
     maxAge,
     path: '/',
   };
@@ -121,6 +145,22 @@ export function isIndianMobile(value: unknown): boolean {
 
 export function indianMobileMessage() {
   return 'Enter a valid 10-digit Indian mobile number starting with 6, 7, 8 or 9.';
+}
+
+/** Strip non-letters, collapse spaces, trim. */
+export function normalizeName(value: unknown): string {
+  return String(value ?? '').replace(/[^A-Za-z\s]/g, '').replace(/\s+/g, ' ').trim();
+}
+
+/** Valid full name: capitalised words, letters only, 2-50 chars. */
+export function isValidName(value: unknown): boolean {
+  const name = normalizeName(value);
+  if (name.length < 2 || name.length > 50) return false;
+  return /^[A-Z][a-z]*(?:\s[A-Z][a-z]*)*$/.test(name);
+}
+
+export function nameFormatMessage() {
+  return 'Name must contain only letters and start with a capital letter.';
 }
 
 export function escapeRegex(value: string): string {

@@ -5,6 +5,10 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Image from 'next/image';
 import { Eye, EyeOff, X, CheckCircle, AlertCircle } from 'lucide-react';
+import { isValidName, NAME_FORMAT_MESSAGE, sanitizeNameInput } from '@/lib/name-format';
+import { isValidEmail, EMAIL_FORMAT_MESSAGE } from '@/lib/email-format';
+import { isIndianMobile, INDIAN_MOBILE_MESSAGE, sanitizeMobileInput } from '@/lib/phone';
+import { isValidPassword, PASSWORD_POLICY_MESSAGE } from '@/lib/password';
 
 interface Props {
   isOpen: boolean;
@@ -74,6 +78,11 @@ export default function AuthModal({ isOpen, onClose, onSuccess, planLabel, planP
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    if (!isValidName(sFirst)) { setError(`First name: ${NAME_FORMAT_MESSAGE}`); return; }
+    if (!isValidName(sLast))  { setError(`Last name: ${NAME_FORMAT_MESSAGE}`); return; }
+    if (!isValidEmail(sEmail)) { setError(EMAIL_FORMAT_MESSAGE); return; }
+    if (sPhone && !isIndianMobile(sPhone)) { setError(INDIAN_MOBILE_MESSAGE); return; }
+    if (!isValidPassword(sPwd)) { setError(PASSWORD_POLICY_MESSAGE); return; }
     if (sPwd !== sCPwd) { setError('Passwords do not match.'); return; }
     if (!agreed) { setError('Please accept the Terms & Conditions.'); return; }
     setLoading(true);
@@ -83,6 +92,7 @@ export default function AuthModal({ isOpen, onClose, onSuccess, planLabel, planP
         firstName: sFirst,
         lastName: sLast,
         email: sEmail,
+        phone: sPhone,
         password: sPwd,
         confirmPassword: sCPwd,
       });
@@ -229,11 +239,11 @@ export default function AuthModal({ isOpen, onClose, onSuccess, planLabel, planP
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         <label className="block text-xs font-semibold text-gray-600 mb-1.5">First Name</label>
-                        <input required value={sFirst} onChange={e => setSFirst(e.target.value)} placeholder="Rupesh" className={inp} />
+                        <input required value={sFirst} onChange={e => setSFirst(sanitizeNameInput(e.target.value))} placeholder="Rupesh" className={inp} autoComplete="given-name" />
                       </div>
                       <div>
                         <label className="block text-xs font-semibold text-gray-600 mb-1.5">Last Name</label>
-                        <input required value={sLast} onChange={e => setSLast(e.target.value)} placeholder="Kumar" className={inp} />
+                        <input required value={sLast} onChange={e => setSLast(sanitizeNameInput(e.target.value))} placeholder="Kumar" className={inp} autoComplete="family-name" />
                       </div>
                     </div>
                     <div>
@@ -244,14 +254,14 @@ export default function AuthModal({ isOpen, onClose, onSuccess, planLabel, planP
                       <label className="block text-xs font-semibold text-gray-600 mb-1.5">Phone Number</label>
                       <div className="flex gap-2">
                         <span className="rounded-xl border border-gray-200 px-3 py-3 text-sm bg-gray-50 text-gray-600 shrink-0">+91</span>
-                        <input value={sPhone} onChange={e => setSPhone(e.target.value.replace(/\D/,'').slice(0,10))} placeholder="9876543210" className={inp} />
+                        <input value={sPhone} onChange={e => setSPhone(sanitizeMobileInput(e.target.value))} placeholder="9876543210" className={inp} inputMode="numeric" maxLength={10} />
                       </div>
                     </div>
                     <div>
                       <label className="block text-xs font-semibold text-gray-600 mb-1.5">Password</label>
                       <div className="relative">
-                        <input type={showPwd ? 'text' : 'password'} required value={sPwd} onChange={e => setSPwd(e.target.value)} placeholder="Min 6 characters" className={`${inp} pr-11`} />
-                        <button type="button" onClick={() => setShowPwd(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                        <input type={showPwd ? 'text' : 'password'} required value={sPwd} onChange={e => setSPwd(e.target.value)} placeholder="Min 8 chars, 1 letter & 1 number" className={`${inp} pr-11`} />
+                        <button type="button" aria-label={showPwd ? 'Hide password' : 'Show password'} onClick={() => setShowPwd(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
                           {showPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                         </button>
                       </div>
@@ -260,14 +270,14 @@ export default function AuthModal({ isOpen, onClose, onSuccess, planLabel, planP
                       <label className="block text-xs font-semibold text-gray-600 mb-1.5">Confirm Password</label>
                       <div className="relative">
                         <input type={showCPwd ? 'text' : 'password'} required value={sCPwd} onChange={e => setSCPwd(e.target.value)} placeholder="Repeat password" className={`${inp} pr-11`} />
-                        <button type="button" onClick={() => setShowCPwd(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                        <button type="button" aria-label={showCPwd ? 'Hide password' : 'Show password'} onClick={() => setShowCPwd(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
                           {showCPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                         </button>
                       </div>
                     </div>
                     <label className="flex items-start gap-2 text-xs text-gray-600 cursor-pointer">
                       <input type="checkbox" checked={agreed} onChange={e => setAgreed(e.target.checked)} className="accent-orange-500 mt-0.5 shrink-0" />
-                      I agree to Adyapan's <a href="#" className="text-orange-600 hover:underline">Terms</a> & <a href="#" className="text-orange-600 hover:underline">Privacy Policy</a>
+                      I agree to Adyapan's <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-orange-600 hover:underline">Terms</a> & <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-orange-600 hover:underline">Privacy Policy</a>
                     </label>
                     <motion.button type="submit" disabled={loading} whileHover={{ scale: loading ? 1 : 1.02 }} whileTap={{ scale: 0.98 }}
                       className="w-full py-3.5 rounded-xl font-bold text-white text-sm shadow-lg disabled:opacity-60 flex items-center justify-center gap-2"

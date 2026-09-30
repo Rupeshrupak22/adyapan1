@@ -3,6 +3,9 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronRight, CheckCircle, User, Mail, Phone, GraduationCap, MapPin, BookOpen, ChevronDown } from 'lucide-react';
+import { isValidName, NAME_FORMAT_MESSAGE, sanitizeNameInput } from '@/lib/name-format';
+import { isValidEmail, EMAIL_FORMAT_MESSAGE } from '@/lib/email-format';
+import { isIndianMobile, INDIAN_MOBILE_MESSAGE, sanitizeMobileInput } from '@/lib/phone';
 
 const COUNTRY_CODES = [
   { flag: 'ðŸ‡®ðŸ‡³', code: '+91', name: 'India' },
@@ -51,6 +54,9 @@ function CustomDropdown({
       <button
         type="button"
         onClick={() => setOpen(!open)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label={placeholder}
         className={`w-full flex items-center justify-between px-4 py-3 border rounded-xl text-sm transition-all duration-200 bg-white
           ${open ? 'border-orange-400 ring-2 ring-orange-100' : 'border-gray-200 hover:border-orange-300'}`}
       >
@@ -65,11 +71,14 @@ function CustomDropdown({
       
         {open && (
           <ul
+            role="listbox"
             className="absolute z-50 mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl overflow-hidden max-h-52 overflow-y-auto"
           >
             {options.map((opt) => (
               <li
                 key={opt}
+                role="option"
+                aria-selected={value === opt}
                 onClick={() => { onChange(opt); setOpen(false); }}
                 className={`flex items-center gap-3 px-4 py-2.5 text-sm cursor-pointer transition-colors
                   ${value === opt
@@ -107,6 +116,9 @@ function CountryCodePicker({ value, onChange }: { value: string; onChange: (v: s
       <button
         type="button"
         onClick={() => setOpen(!open)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label="Select country code"
         className={`flex items-center gap-1.5 px-3 py-3 border-r border-gray-200 bg-gray-50 hover:bg-orange-50 transition-colors text-sm font-medium text-gray-700 rounded-l-xl min-w-[90px]
           ${open ? 'bg-orange-50' : ''}`}
       >
@@ -161,17 +173,25 @@ export default function CampusAmbassadorApplyPage() {
   });
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
+    setErrorMsg('');
     if (name === 'phone') {
-      const digits = value.replace(/\D/g, '').slice(0, 10);
-      setForm({ ...form, phone: digits });
+      setForm({ ...form, phone: sanitizeMobileInput(value) });
       return;
     }
-    if (['name', 'city', 'branch', 'college'].includes(name)) {
-      const lettersOnly = value.replace(/[^a-zA-Z\s]/g, '');
-      setForm({ ...form, [name]: lettersOnly });
+    // Name/City: letters + spaces only, auto-capitalise.
+    if (['name', 'city'].includes(name)) {
+      setForm({ ...form, [name]: sanitizeNameInput(value) });
+      return;
+    }
+    // College/Branch: allow letters, digits, spaces and common punctuation
+    // (real names like "St. Xavier's", "IIT-B", "CSE (AI & ML)").
+    if (['college', 'branch'].includes(name)) {
+      const cleaned = value.replace(/[^A-Za-z0-9\s.,&()'\-/]/g, '').slice(0, 200);
+      setForm({ ...form, [name]: cleaned });
       return;
     }
     setForm({ ...form, [name]: value });
@@ -179,10 +199,45 @@ export default function CampusAmbassadorApplyPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErrorMsg('');
+
+    if (!isValidName(form.name)) { setErrorMsg(NAME_FORMAT_MESSAGE); return; }
+    if (!isValidEmail(form.email)) { setErrorMsg(EMAIL_FORMAT_MESSAGE); return; }
+    if (!isIndianMobile(form.phone)) { setErrorMsg(INDIAN_MOBILE_MESSAGE); return; }
+    if (!form.college.trim()) { setErrorMsg('Please enter your college/university.'); return; }
+    if (!form.city.trim()) { setErrorMsg('Please enter your city.'); return; }
+    if (!form.branch.trim()) { setErrorMsg('Please enter your branch.'); return; }
+    if (!form.year) { setErrorMsg('Please select your year of study.'); return; }
+    if (form.why.trim().length < 10) { setErrorMsg('Please tell us a bit more about your motivation.'); return; }
+
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 1200));
-    setLoading(false);
-    setSubmitted(true);
+    try {
+      const res = await fetch('/api/campus-ambassador', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: form.name,
+          email: form.email,
+          phone: form.phone,
+          college: form.college,
+          city: form.city,
+          branch: form.branch,
+          year: form.year,
+          linkedin: form.linkedin,
+          why: form.why,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setErrorMsg(data.error || 'Something went wrong. Please try again.');
+        return;
+      }
+      setSubmitted(true);
+    } catch {
+      setErrorMsg('Network error. Please check your connection and try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const inputClass = "w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100 text-sm transition-all duration-200 hover:border-orange-300";
@@ -335,6 +390,11 @@ export default function CampusAmbassadorApplyPage() {
               placeholder="Tell us a bit about yourself and your motivation..."
               className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100 text-sm resize-none transition-all duration-200 hover:border-orange-300" />
           </div>
+
+          {/* Error */}
+          {errorMsg && (
+            <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">{errorMsg}</p>
+          )}
 
           {/* Submit */}
           <button

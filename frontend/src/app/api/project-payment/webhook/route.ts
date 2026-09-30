@@ -45,16 +45,16 @@ const projectRequestSchema = new mongoose.Schema(
 
 function verifyWebhookSignature(rawBody: string, signature: string): boolean {
   const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
+  // Always reject when the secret is missing/placeholder (never fail-open),
+  // regardless of environment — a webhook is only ever called by Razorpay.
   if (!secret || secret.includes('your_webhook')) {
-    if (process.env.NODE_ENV === 'production') {
-      console.error('[Webhook] RAZORPAY_WEBHOOK_SECRET is not configured - rejecting webhook');
-      return false;
-    }
-    console.warn('[Webhook] RAZORPAY_WEBHOOK_SECRET not configured - skipping verification in local dev only');
-    return true;
+    console.error('[Webhook] RAZORPAY_WEBHOOK_SECRET is not configured - rejecting webhook');
+    return false;
   }
   const expected = crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
-  return expected === signature;
+  const a = Buffer.from(expected);
+  const b = Buffer.from(String(signature || ''));
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
 export async function POST(req: NextRequest) {

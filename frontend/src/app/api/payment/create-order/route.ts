@@ -11,6 +11,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { getClientIp, isRateLimited, rateLimitResponse } from '@/lib/security';
 
 const PLAN_BASE_PRICES: Record<string, number> = {
   'plan-1': 3000,
@@ -19,10 +20,15 @@ const PLAN_BASE_PRICES: Record<string, number> = {
   'plan-4-premium': 15000,
 };
 
-const COUPONS: Record<string, { type: 'percent' | 'flat'; value: number; label: string }> = {
-  ADYAPAN5:  { type: 'percent', value: 5,    label: 'Extra 5% Off' },
-  STUDENT10: { type: 'flat',    value: 1000, label: 'Rs. 1,000 Off' },
-  CAREER20:  { type: 'percent', value: 20,   label: '20% Off Premium' },
+/**
+ * Coupons + which plans they may apply to.
+ * `plans: null` = any plan. CAREER20 (a premium discount) is restricted to the
+ * premium plan so it can't be stacked onto the cheapest plan.
+ */
+const COUPONS: Record<string, { type: 'percent' | 'flat'; value: number; label: string; plans: string[] | null }> = {
+  ADYAPAN5:  { type: 'percent', value: 5,    label: 'Extra 5% Off',    plans: null },
+  STUDENT10: { type: 'flat',    value: 1000, label: 'Rs. 1,000 Off',   plans: null },
+  CAREER20:  { type: 'percent', value: 20,   label: '20% Off Premium', plans: ['plan-4-premium'] },
 };
 
 function calculatePricing(plan: string, couponCode?: string) {
@@ -32,6 +38,9 @@ function calculatePricing(plan: string, couponCode?: string) {
   const code = String(couponCode || '').trim().toUpperCase();
   const coupon = code ? COUPONS[code] : null;
   if (code && !coupon) return { error: 'Invalid coupon code' as const };
+  if (coupon && coupon.plans && !coupon.plans.includes(plan)) {
+    return { error: 'This coupon is not valid for the selected plan' as const };
+  }
 
   const couponDiscount = coupon
     ? coupon.type === 'percent'
@@ -54,6 +63,11 @@ function calculatePricing(plan: string, couponCode?: string) {
 }
 
 export async function POST(req: NextRequest) {
+  const ip = getClientIp(req);
+  if (isRateLimited(`create-order:${ip}`, 15, 15 * 60 * 1000)) {
+    return rateLimitResponse('Too many attempts. Please try again later.');
+  }
+
   try {
     const { plan, couponCode } = await req.json();
 

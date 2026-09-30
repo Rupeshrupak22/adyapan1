@@ -14,13 +14,17 @@ import { z } from 'zod';
 import { connectToDatabase } from '@/lib/mongodb';
 import { protectRouteByRole } from '@/lib/auth';
 import { sendLeadNotificationEmails } from '@/lib/resend';
-import { isStrictEmail, strictEmailMessage } from '@/lib/security';
+import {
+  isStrictEmail, strictEmailMessage,
+  isValidName, nameFormatMessage,
+  isIndianMobile, indianMobileMessage, normalizeIndianMobile,
+} from '@/lib/security';
 import ManualLead from '@/models/ManualLead';
 
 // â"€â"€ Validation schema â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 const CreateSchema = z.object({
-  name:           z.string().min(2, 'Name must be at least 2 characters').max(100),
-  phone:          z.string().min(7, 'Enter a valid phone number').max(20),
+  name:           z.string().refine(isValidName, nameFormatMessage()),
+  phone:          z.string().refine(isIndianMobile, indianMobileMessage()).transform(normalizeIndianMobile),
   email:          z.string().refine(isStrictEmail, strictEmailMessage()),
   college:        z.string().max(200).optional().default(''),
   city:           z.string().max(100).optional().default(''),
@@ -72,12 +76,31 @@ export async function GET(request: NextRequest) {
       ];
     }
 
-    const [leads, total] = await Promise.all([
+    const [leads, total, byType, paidCount] = await Promise.all([
       ManualLead.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
       ManualLead.countDocuments(filter),
+      // Aggregate counts across the WHOLE filtered dataset (not just this page)
+      ManualLead.aggregate([
+        { $match: filter },
+        { $group: { _id: '$enrollmentType', count: { $sum: 1 } } },
+      ]),
+      ManualLead.countDocuments({ ...filter, paymentStatus: 'Paid' }),
     ]);
 
-    return NextResponse.json({ success: true, leads, total, page, limit });
+    const typeCounts: Record<string, number> = {};
+    for (const row of byType as Array<{ _id: string; count: number }>) {
+      if (row._id) typeCounts[row._id] = row.count;
+    }
+    const stats = {
+      total,
+      online:      typeCounts['Online'] || 0,
+      offline:     typeCounts['Offline Form'] || 0,
+      officeVisit: typeCounts['Office Visit'] || 0,
+      phoneCall:   typeCounts['Phone Call'] || 0,
+      paid:        paidCount,
+    };
+
+    return NextResponse.json({ success: true, leads, total, page, limit, stats });
   } catch (err: any) {
     console.error('[ManualLeads GET]', err.message);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
@@ -103,16 +126,15 @@ export async function POST(request: NextRequest) {
 
     const data = parsed.data;
 
-    // â"€â"€ Duplicate check by phone OR email â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
-    const duplicate = await ManualLead.findOne({
-      $or: [
-        { phone: data.phone.trim() },
-        { email: data.email.toLowerCase().trim() },
-      ],
-    }).lean();
-
-    if (duplicate) {
-      const field = (duplicate as any).phone === data.phone.trim() ? 'phone' : 'email';
+    // â"€â"€ Duplicate check by phone OR email (label the field that actually collided) â"€â"€
+    const normPhone = data.phone.trim();
+    const normEmail = data.email.toLowerCase().trim();
+    const [phoneDup, emailDup] = await Promise.all([
+      ManualLead.findOne({ phone: normPhone }).lean(),
+      ManualLead.findOne({ email: normEmail }).lean(),
+    ]);
+    if (phoneDup || emailDup) {
+      const field = phoneDup ? 'phone' : 'email';
       return NextResponse.json(
         { error: `A student with this ${field} already exists in manual leads.`, duplicate: true },
         { status: 409 }
@@ -171,21 +193,22 @@ export async function PATCH(request: NextRequest) {
 
     const { id, ...updates } = parsed.data;
 
-    // If phone/email is being changed, check for duplicates (excluding self)
-    if (updates.phone || updates.email) {
-      const orConditions: Record<string, unknown>[] = [];
-      if (updates.phone) orConditions.push({ phone: updates.phone.trim() });
-      if (updates.email) orConditions.push({ email: updates.email.toLowerCase().trim() });
-
-      const duplicate = await ManualLead.findOne({
-        _id: { $ne: id },
-        $or: orConditions,
-      }).lean();
-
-      if (duplicate) {
-        const field = (duplicate as any).phone === updates.phone?.trim() ? 'phone' : 'email';
+    // If phone/email is being changed, check for duplicates (excluding self).
+    // Query each field separately so we report the field that actually collided.
+    if (updates.phone) {
+      const phoneDup = await ManualLead.findOne({ _id: { $ne: id }, phone: updates.phone.trim() }).lean();
+      if (phoneDup) {
         return NextResponse.json(
-          { error: `Another student with this ${field} already exists.`, duplicate: true },
+          { error: 'Another student with this phone already exists.', duplicate: true },
+          { status: 409 }
+        );
+      }
+    }
+    if (updates.email) {
+      const emailDup = await ManualLead.findOne({ _id: { $ne: id }, email: updates.email.toLowerCase().trim() }).lean();
+      if (emailDup) {
+        return NextResponse.json(
+          { error: 'Another student with this email already exists.', duplicate: true },
           { status: 409 }
         );
       }

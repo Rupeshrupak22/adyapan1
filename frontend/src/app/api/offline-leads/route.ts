@@ -8,6 +8,9 @@ import {
   isSpamSubmission,
   isIndianMobile,
   indianMobileMessage,
+  isValidName,
+  nameFormatMessage,
+  normalizeName,
   normalizeEmail,
   normalizeIndianMobile,
   rateLimitResponse,
@@ -48,7 +51,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Security check failed. Please try again.' }, { status: 400 });
     }
 
-    const name = clean(body.name);
+    const name = normalizeName(body.name);
     const phone = normalizeIndianMobile(body.phone);
     const email = normalizeEmail(body.email);
     const college = clean(body.college);
@@ -66,6 +69,13 @@ export async function POST(req: NextRequest) {
     if (missing.length) {
       return NextResponse.json(
         { error: `Please fill in: ${missing.join(', ')}` },
+        { status: 400 }
+      );
+    }
+
+    if (!isValidName(name)) {
+      return NextResponse.json(
+        { error: nameFormatMessage() },
         { status: 400 }
       );
     }

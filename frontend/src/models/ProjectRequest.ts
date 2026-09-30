@@ -20,7 +20,7 @@ export interface ProjectRequestDocument {
   contactPhone: string;
   imageUrls: string[];
   pdfUrls: string[];
-  referenceFiles: string[];
+  referenceFiles: unknown[];
   additionalNotes: string;
   paymentId: string;
   orderId: string;
@@ -50,7 +50,7 @@ const projectRequestSchema = new Schema<ProjectRequestDocument>(
     contactPhone:    { type: String, required: true, trim: true },
     imageUrls:       { type: [String], default: [] },
     pdfUrls:         { type: [String], default: [] },
-    referenceFiles:  { type: [String], default: [] },
+    referenceFiles:  { type: Schema.Types.Mixed, default: [] },
     additionalNotes: { type: String, default: '' },
     paymentId:       { type: String, default: '', index: true, sparse: true },
     orderId:         { type: String, default: '', index: true, sparse: true },

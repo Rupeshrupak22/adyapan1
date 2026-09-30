@@ -8,6 +8,8 @@ import {
   MapPin, Calendar, CreditCard, ChevronLeft, ChevronRight,
   BookOpen, StickyNote, UserCheck, ChevronDown,
 } from 'lucide-react';
+import { sanitizeNameInput } from '@/lib/name-format';
+import { sanitizeMobileInput } from '@/lib/phone';
 
 // â"€â"€ Types â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 type EnrollmentType = 'Online' | 'Offline Form' | 'Office Visit' | 'Phone Call';
@@ -237,15 +239,15 @@ function LeadModal({
                 <label className="block text-xs font-semibold text-gray-600 mb-1.5">
                   Student Name <span className="text-red-500">*</span>
                 </label>
-                <input required value={form.name} onChange={e => set('name', e.target.value)}
+                <input required value={form.name} onChange={e => set('name', sanitizeNameInput(e.target.value))}
                   placeholder="e.g. Rahul Sharma" className={inp} />
               </div>
               <div>
                 <label className="block text-xs font-semibold text-gray-600 mb-1.5">
                   Phone <span className="text-red-500">*</span>
                 </label>
-                <input required value={form.phone} onChange={e => set('phone', e.target.value)}
-                  placeholder="e.g. 9876543210" className={inp} />
+                <input required value={form.phone} onChange={e => set('phone', sanitizeMobileInput(e.target.value))}
+                  placeholder="e.g. 9876543210" className={inp} inputMode="numeric" maxLength={10} />
               </div>
               <div>
                 <label className="block text-xs font-semibold text-gray-600 mb-1.5">
@@ -370,6 +372,7 @@ export default function ManualLeadsPage() {
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState('');
   const [total,   setTotal]   = useState(0);
+  const [stats,   setStats]   = useState({ total: 0, online: 0, offline: 0, officeVisit: 0, phoneCall: 0, paid: 0 });
   const [page,    setPage]    = useState(1);
   const LIMIT = 20;
 
@@ -418,6 +421,7 @@ export default function ManualLeadsPage() {
       if (!res.ok) throw new Error(data.error || 'Failed to load');
       setLeads(data.leads || []);
       setTotal(data.total || 0);
+      if (data.stats) setStats(data.stats);
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -466,15 +470,8 @@ export default function ManualLeadsPage() {
 
   const pages = Math.ceil(total / LIMIT);
 
-  // Stats
-  const stats = {
-    total,
-    online:      leads.filter(l => l.enrollmentType === 'Online').length,
-    offline:     leads.filter(l => l.enrollmentType === 'Offline Form').length,
-    officeVisit: leads.filter(l => l.enrollmentType === 'Office Visit').length,
-    phoneCall:   leads.filter(l => l.enrollmentType === 'Phone Call').length,
-    paid:        leads.filter(l => l.paymentStatus === 'Paid').length,
-  };
+  // Stats come from the API (aggregated over the full filtered dataset),
+  // so the breakdown numbers stay consistent with the Total.
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 space-y-6">

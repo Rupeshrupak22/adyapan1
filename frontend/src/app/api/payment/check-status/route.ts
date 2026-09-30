@@ -23,7 +23,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import jwt from 'jsonwebtoken';
 import { connectToDatabase } from '@/lib/mongodb';
-import { requireJwtSecret } from '@/lib/security';
+import { requireJwtSecret, getClientIp, isRateLimited, rateLimitResponse, normalizeName, normalizeEmail, normalizeIndianMobile } from '@/lib/security';
 import { sendPaymentSuccessEmail } from '@/lib/email';
 import Payment from '@/models/Payment';
 import Enrollment from '@/models/Enrollment';
@@ -46,10 +46,10 @@ const PLAN_BASE_PRICES: Record<string, number> = {
   'plan-4-premium': 15000,
 };
 
-const COUPONS: Record<string, { type: 'percent' | 'flat'; value: number }> = {
-  ADYAPAN5: { type: 'percent', value: 5 },
-  STUDENT10: { type: 'flat', value: 1000 },
-  CAREER20: { type: 'percent', value: 20 },
+const COUPONS: Record<string, { type: 'percent' | 'flat'; value: number; plans: string[] | null }> = {
+  ADYAPAN5: { type: 'percent', value: 5, plans: null },
+  STUDENT10: { type: 'flat', value: 1000, plans: null },
+  CAREER20: { type: 'percent', value: 20, plans: ['plan-4-premium'] },
 };
 
 function calculatePricing(plan: string, couponCode?: unknown) {
@@ -57,7 +57,9 @@ function calculatePricing(plan: string, couponCode?: unknown) {
   if (!basePrice) return null;
 
   const code = String(couponCode || '').trim().toUpperCase();
-  const coupon = code ? COUPONS[code] : null;
+  let coupon = code ? COUPONS[code] : null;
+  // Ignore a coupon that isn't valid for this plan (keeps amount check honest).
+  if (coupon && coupon.plans && !coupon.plans.includes(plan)) coupon = null;
   const couponDiscount = coupon
     ? coupon.type === 'percent'
       ? Math.round((basePrice * coupon.value) / 100)
@@ -198,6 +200,12 @@ async function savePaymentAndEnroll(
 }
 
 export async function GET(req: NextRequest) {
+  const ip = getClientIp(req);
+  // UPI polling can be frequent, so allow a generous but bounded rate.
+  if (isRateLimited(`payment-status:${ip}`, 60, 60 * 1000)) {
+    return rateLimitResponse('Too many status checks. Please wait a moment.');
+  }
+
   const { searchParams } = new URL(req.url);
   const orderId = searchParams.get('orderId') || '';
   const name = searchParams.get('name') || '';
@@ -283,9 +291,9 @@ export async function GET(req: NextRequest) {
           planLabel,
           pricing.totalAmount,
           false,
-          name,
-          email,
-          phone
+          normalizeName(name),
+          normalizeEmail(email),
+          normalizeIndianMobile(phone)
         );
 
         if (email && name) {

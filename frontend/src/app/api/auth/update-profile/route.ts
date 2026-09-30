@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import { protectRoute } from '@/lib/auth';
-import { cleanText, normalizePhone, sanitizeMongoInput } from '@/lib/security';
+import {
+  cleanText, sanitizeMongoInput,
+  isValidName, nameFormatMessage, normalizeName,
+  isIndianMobile, indianMobileMessage, normalizeIndianMobile,
+} from '@/lib/security';
 import AuthUser from '@/models/AuthUser';
 
-export async function PATCH(req: NextRequest) {
+async function handleUpdate(req: NextRequest) {
   const auth = protectRoute(req);
   if (auth instanceof NextResponse) return auth;
 
@@ -15,8 +19,19 @@ export async function PATCH(req: NextRequest) {
     const { name, phone, avatar } = body;
 
     const updateFields: Record<string, string> = {};
-    if (name?.trim())   updateFields.name   = cleanText(name, 100);
-    if (phone?.trim())  updateFields.phone  = normalizePhone(phone);
+
+    if (name?.trim()) {
+      if (!isValidName(name)) {
+        return NextResponse.json({ error: nameFormatMessage() }, { status: 400 });
+      }
+      updateFields.name = normalizeName(name);
+    }
+    if (phone?.trim()) {
+      if (!isIndianMobile(phone)) {
+        return NextResponse.json({ error: indianMobileMessage() }, { status: 400 });
+      }
+      updateFields.phone = normalizeIndianMobile(phone);
+    }
     if (avatar?.trim()) updateFields.avatar = cleanText(avatar, 500);
 
     const updated = await AuthUser.findByIdAndUpdate(
@@ -43,3 +58,7 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
+
+// Support both PATCH (REST) and POST (some clients call it via POST).
+export const PATCH = handleUpdate;
+export const POST = handleUpdate;

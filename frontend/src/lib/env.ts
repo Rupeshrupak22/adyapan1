@@ -24,7 +24,8 @@ const ENV_VARS: EnvVar[] = [
   { key: 'RAZORPAY_KEY_SECRET',      required: true,  secret: true  },
   // Important - degraded functionality without these
   { key: 'NEXT_PUBLIC_APP_URL',      required: false, secret: false },
-  { key: 'SENDGRID_API_KEY',         required: false, secret: true  },
+  { key: 'RESEND_API_KEY',           required: false, secret: true  },
+  { key: 'RAZORPAY_WEBHOOK_SECRET',  required: false, secret: true  },
   { key: 'ADMIN_EMAIL',              required: false, secret: false },
   { key: 'NEXT_PUBLIC_BACKEND_URL',  required: false, secret: false },
 ];
@@ -68,7 +69,8 @@ export const env = {
   razorpayKeySecret:  process.env.RAZORPAY_KEY_SECRET || '',
   appUrl:             process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
   backendUrl:         process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5000',
-  sendgridApiKey:     process.env.SENDGRID_API_KEY || '',
+  resendApiKey:       process.env.RESEND_API_KEY || '',
+  razorpayWebhookSecret: process.env.RAZORPAY_WEBHOOK_SECRET || '',
   adminEmail:         process.env.ADMIN_EMAIL || '',
   nodeEnv:            process.env.NODE_ENV || 'development',
   isProd:             process.env.NODE_ENV === 'production',

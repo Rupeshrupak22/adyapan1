@@ -14,71 +14,30 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import { sendLeadNotificationEmails } from '@/lib/resend';
-import mongoose from 'mongoose';
+import ProjectRequest from '@/models/ProjectRequest';
+import ProjectPayment from '@/models/ProjectPayment';
+import {
+  getClientIp, isRateLimited, rateLimitResponse, sanitizeMongoInput, isSpamSubmission,
+  isValidName, nameFormatMessage, normalizeName,
+  isStrictEmail, strictEmailMessage, normalizeEmail,
+  isIndianMobile, indianMobileMessage, normalizeIndianMobile,
+} from '@/lib/security';
 
 const MIN_AMOUNT = 3000; // INR
 
-/* â"€â"€ lazy-load backend models via mongoose (shared connection) â"€â"€ */
-function getProjectRequestModel() {
-  if (mongoose.models.ProjectRequest) return mongoose.models.ProjectRequest;
-  const schema = new mongoose.Schema(
-    {
-      projectTitle:   { type: String, required: true },
-      category:       { type: String, required: true },
-      description:    { type: String, required: true },
-      features:       { type: [String], default: [] },
-      techPreference: { type: String, default: '' },
-      deadline:       { type: Date, required: true },
-      budget:         { type: Number, required: true, min: 3000 },
-      contactName:    { type: String, required: true },
-      contactEmail:   { type: String, required: true, lowercase: true },
-      contactPhone:   { type: String, required: true },
-      imageUrls:      { type: [String], default: [] },
-      pdfUrls:        { type: [String], default: [] },
-      referenceFiles: { type: mongoose.Schema.Types.Mixed, default: [] },
-      additionalNotes:{ type: String, default: '' },
-      userId:         { type: mongoose.Schema.Types.ObjectId, default: null },
-      paymentId:      { type: String, default: '' },
-      orderId:        { type: String, default: '' },
-      paymentStatus:  { type: String, enum: ['pending','success','failed'], default: 'pending' },
-      paidAmount:     { type: Number, default: 0 },
-      projectStatus:  { type: String, default: 'draft' },
-      emailSent:      { type: Boolean, default: false },
-    },
-    { timestamps: true }
-  );
-  return mongoose.model('ProjectRequest', schema);
-}
-
-function getProjectPaymentModel() {
-  if (mongoose.models.ProjectPayment) return mongoose.models.ProjectPayment;
-  const schema = new mongoose.Schema(
-    {
-      projectRequestId:  { type: mongoose.Schema.Types.ObjectId, required: true },
-      contactName:       { type: String, required: true },
-      contactEmail:      { type: String, required: true, lowercase: true },
-      contactPhone:      { type: String, default: '' },
-      razorpayOrderId:   { type: String, required: true, unique: true },
-      razorpayPaymentId: { type: String, default: '' },
-      razorpaySignature: { type: String, default: '' },
-      amount:            { type: Number, required: true, min: 3000 },
-      currency:          { type: String, default: 'INR' },
-      status:            { type: String, enum: ['pending','success','failed'], default: 'pending' },
-      signatureVerified: { type: Boolean, default: false },
-      isTestMode:        { type: Boolean, default: false },
-      paidAt:            { type: Date, default: null },
-      failureReason:     { type: String, default: '' },
-    },
-    { timestamps: true }
-  );
-  return mongoose.model('ProjectPayment', schema);
-}
-
 export async function POST(req: NextRequest) {
+  const ip = getClientIp(req);
+  if (isRateLimited(`project-order:${ip}`, 10, 15 * 60 * 1000)) {
+    return rateLimitResponse('Too many attempts. Please try again later.');
+  }
+
   try {
     await connectToDatabase();
 
-    const body = await req.json();
+    const body = sanitizeMongoInput(await req.json()) as Record<string, any>;
+    if (isSpamSubmission(body)) {
+      return NextResponse.json({ success: true });
+    }
     const {
       projectTitle, category, description, features,
       techPreference, deadline, budget, contactName,
@@ -87,12 +46,20 @@ export async function POST(req: NextRequest) {
     } = body;
 
     /* â"€â"€ 1. Validate required fields â"€â"€ */
-    if (!projectTitle?.trim() || !category || !description?.trim() ||
-        !deadline || !contactName?.trim() || !contactEmail?.trim() || !contactPhone?.trim()) {
+    if (!projectTitle?.trim() || !category || !description?.trim() || !deadline) {
       return NextResponse.json(
         { success: false, error: 'Missing required fields' },
         { status: 400 }
       );
+    }
+    if (!isValidName(contactName)) {
+      return NextResponse.json({ success: false, error: nameFormatMessage() }, { status: 400 });
+    }
+    if (!isStrictEmail(contactEmail)) {
+      return NextResponse.json({ success: false, error: strictEmailMessage() }, { status: 400 });
+    }
+    if (!isIndianMobile(contactPhone)) {
+      return NextResponse.json({ success: false, error: indianMobileMessage() }, { status: 400 });
     }
 
     /* â"€â"€ 2. Validate amount server-side â"€â"€ */
@@ -142,8 +109,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const cleanName  = normalizeName(contactName);
+    const cleanEmail = normalizeEmail(contactEmail);
+    const cleanPhone = normalizeIndianMobile(contactPhone);
+
     /* â"€â"€ 4. Save ProjectRequest (draft) â"€â"€ */
-    const ProjectRequest = getProjectRequestModel();
     const projectRequest = await ProjectRequest.create({
       projectTitle:    projectTitle.trim(),
       category,
@@ -152,9 +122,9 @@ export async function POST(req: NextRequest) {
       techPreference:  techPreference || '',
       deadline:        new Date(deadline),
       budget:          amount,
-      contactName:     contactName.trim(),
-      contactEmail:    contactEmail.toLowerCase().trim(),
-      contactPhone:    contactPhone.trim(),
+      contactName:     cleanName,
+      contactEmail:    cleanEmail,
+      contactPhone:    cleanPhone,
       imageUrls:       imageUrls   || [],
       pdfUrls:         pdfUrls     || [],
       referenceFiles:  referenceFiles || [],
@@ -167,12 +137,11 @@ export async function POST(req: NextRequest) {
     });
 
     /* â"€â"€ 5. Save ProjectPayment (pending) â"€â"€ */
-    const ProjectPayment = getProjectPaymentModel();
     await ProjectPayment.create({
       projectRequestId:  projectRequest._id,
-      contactName:       contactName.trim(),
-      contactEmail:      contactEmail.toLowerCase().trim(),
-      contactPhone:      contactPhone.trim(),
+      contactName:       cleanName,
+      contactEmail:      cleanEmail,
+      contactPhone:      cleanPhone,
       razorpayOrderId,
       amount,
       currency:          'INR',

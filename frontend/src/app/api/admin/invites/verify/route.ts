@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
     const now = new Date();
 
     if (invite.used) {
-      console.warn(`[InviteVerify]  Already used: ${invite.email} | IP: ${ip}`);
+      console.warn(`[InviteVerify] Already used invite ${invite._id} | IP: ${ip}`);
       // Log failed attempt
       await AdminInvite.updateOne(
         { _id: invite._id },
@@ -85,7 +85,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (invite.expiresAt < now) {
-      console.warn(`[InviteVerify]  Expired: ${invite.email} | IP: ${ip}`);
+      console.warn(`[InviteVerify] Expired invite ${invite._id} | IP: ${ip}`);
       await AdminInvite.updateOne(
         { _id: invite._id },
         { $inc: { failedAttempts: 1 }, $set: { lastFailedAt: now } }
@@ -97,7 +97,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (invite.revokedAt) {
-      console.warn(`[InviteVerify]  Revoked: ${invite.email} | IP: ${ip}`);
+      console.warn(`[InviteVerify] Revoked invite ${invite._id} | IP: ${ip}`);
       await AdminInvite.updateOne(
         { _id: invite._id },
         { $inc: { failedAttempts: 1 }, $set: { lastFailedAt: now } }

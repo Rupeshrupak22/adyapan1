@@ -6,6 +6,9 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { Eye, EyeOff, ArrowRight, AlertCircle, CheckCircle, GraduationCap, Building2 } from 'lucide-react';
+import { isValidName, NAME_FORMAT_MESSAGE } from '@/lib/name-format';
+import { isValidEmail, EMAIL_FORMAT_MESSAGE } from '@/lib/email-format';
+import { isValidPassword, PASSWORD_POLICY_MESSAGE } from '@/lib/password';
 
 type Role = 'student' | 'organization';
 
@@ -125,9 +128,25 @@ function SignupContent() {
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    setLoading(true); setError(''); setSuccess('');
+    setError(''); setSuccess('');
 
-    // Step 1: Verify email exists using AbstractAPI
+    // Client-side field checks first (fast feedback, no server round-trip)
+    if (role === 'student') {
+      if (!isValidName(firstName)) { setError(`First name: ${NAME_FORMAT_MESSAGE}`); return; }
+      if (!isValidName(lastName))  { setError(`Last name: ${NAME_FORMAT_MESSAGE}`); return; }
+    } else {
+      if (!fullName.trim()) { setError('Please enter your full name.'); return; }
+      if (!companyName.trim()) { setError('Please enter your company name.'); return; }
+    }
+    if (!isValidEmail(email)) { setError(EMAIL_FORMAT_MESSAGE); return; }
+    if (!isValidPassword(password)) { setError(PASSWORD_POLICY_MESSAGE); return; }
+    if (password !== confirmPassword) { setError('Passwords do not match.'); return; }
+
+    setLoading(true);
+
+    // Step 1: Best-effort deliverability check. If the service is reachable and
+    // says the email is invalid, block; if it errors/times out, continue
+    // (the control fails open by design, but we log so it isn't silent).
     try {
       const verifyRes = await fetch('/api/verify-email', {
         method: 'POST',
@@ -140,8 +159,8 @@ function SignupContent() {
         setLoading(false);
         return;
       }
-    } catch {
-      // If verification service fails, don't block signup
+    } catch (err) {
+      console.warn('[Signup] Email verification service unreachable; continuing.', err);
     }
 
     // Step 2: Proceed with signup

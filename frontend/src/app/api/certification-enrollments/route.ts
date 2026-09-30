@@ -2,11 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { connectToDatabase } from '@/lib/mongodb';
 import { sendLeadNotificationEmails } from '@/lib/resend';
-import { isStrictEmail, strictEmailMessage, isIndianMobile, indianMobileMessage } from '@/lib/security';
+import { isStrictEmail, strictEmailMessage, isIndianMobile, indianMobileMessage, isValidName, nameFormatMessage, normalizeName } from '@/lib/security';
 import CertificationEnrollment from '@/models/CertificationEnrollment';
 
 const EnrollSchema = z.object({
-  name: z.string().min(2, 'Name is required').max(100).transform((v) => v.trim()),
+  name: z.string().refine(isValidName, nameFormatMessage()).transform(normalizeName),
   phone: z.string().refine(isIndianMobile, indianMobileMessage()),
   email: z.string().refine(isStrictEmail, strictEmailMessage()).transform((v) => v.toLowerCase().trim()),
   college: z.string().max(200).optional().default('').transform((v) => v?.trim() ?? ''),

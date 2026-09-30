@@ -204,7 +204,7 @@ export async function POST(request: NextRequest) {
       },
     }, { status: 201 });
 
-    res.cookies.set('authToken', token, authCookieOptions(7 * 24 * 60 * 60));
+    res.cookies.set('authToken', token, authCookieOptions(7 * 24 * 60 * 60, 'strict'));
 
     return res;
 

@@ -6,6 +6,9 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { Eye, EyeOff, CheckCircle, AlertCircle, ArrowRight, Sparkles, Users, BookOpen, Shield, TrendingUp } from 'lucide-react';
+import { isValidName, NAME_FORMAT_MESSAGE } from '@/lib/name-format';
+import { isValidEmail, EMAIL_FORMAT_MESSAGE } from '@/lib/email-format';
+import { isValidPassword, PASSWORD_POLICY_MESSAGE } from '@/lib/password';
 
 /*  Floating orb background  */
 function Orbs() {
@@ -278,7 +281,13 @@ function AuthPageContent() {
         }
         setTimeout(() => router.push(redirectTo), 900);
       } else {
-        // Student signup only
+        // Student signup only — validate client-side before hitting the API
+        if (!isValidName(formData.firstName)) { setError(`First name: ${NAME_FORMAT_MESSAGE}`); setLoading(false); return; }
+        if (!isValidName(formData.lastName))  { setError(`Last name: ${NAME_FORMAT_MESSAGE}`); setLoading(false); return; }
+        if (!isValidEmail(formData.email)) { setError(EMAIL_FORMAT_MESSAGE); setLoading(false); return; }
+        if (!isValidPassword(formData.password)) { setError(PASSWORD_POLICY_MESSAGE); setLoading(false); return; }
+        if (formData.password !== formData.confirmPassword) { setError('Passwords do not match.'); setLoading(false); return; }
+
         const signupData = {
           role: 'student',
           email: formData.email,

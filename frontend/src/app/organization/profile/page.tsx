@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Save, Loader2, AlertCircle, CheckCircle, Building2, Shield, Clock } from 'lucide-react';
+import { isIndianMobile, INDIAN_MOBILE_MESSAGE, sanitizeMobileInput } from '@/lib/phone';
 
 const inputCls = 'w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-100 text-sm text-gray-800 bg-white transition-all';
 const labelCls = 'block text-sm font-semibold text-gray-700 mb-1.5';
@@ -48,14 +49,19 @@ export default function CompanyProfilePage() {
           setRejectionReason(p.rejectionReason || '');
         }
       })
-      .catch(() => {})
+      .catch(() => setError('Could not load your profile. Please refresh the page.'))
       .finally(() => setFetching(false));
   }, []);
 
   const set = (k: string, v: string) => setForm(prev => ({ ...prev, [k]: v }));
 
   const handleSave = async () => {
-    setError(''); setSuccess(''); setSaving(true);
+    setError(''); setSuccess('');
+    if (form.mobileNumber && !isIndianMobile(form.mobileNumber)) {
+      setError(INDIAN_MOBILE_MESSAGE);
+      return;
+    }
+    setSaving(true);
     try {
       const res = await fetch('/api/company/profile', {
         method: 'POST',
@@ -148,7 +154,7 @@ export default function CompanyProfilePage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className={labelCls}>Mobile Number</label>
-            <input type="tel" value={form.mobileNumber} onChange={e => set('mobileNumber', e.target.value)} className={inputCls} placeholder="+91 9876543210" />
+            <input type="tel" inputMode="numeric" maxLength={10} value={form.mobileNumber} onChange={e => set('mobileNumber', sanitizeMobileInput(e.target.value))} className={inputCls} placeholder="10-digit mobile number" />
           </div>
           <div>
             <label className={labelCls}>Website</label>

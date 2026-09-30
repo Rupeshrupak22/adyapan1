@@ -76,18 +76,19 @@ export default function PostJobPage() {
               ))}
             </div>
 
-            {/* Notify CTA */}
-            <motion.div
+            {/* Notify CTA — real mailto so the action works */}
+            <motion.a
+              href="mailto:support@adyapan.com?subject=Notify%20me%20when%20Job%20Posting%20launches"
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
-              className="flex items-center gap-3 p-4 rounded-2xl border-2 border-orange-200 bg-orange-50 cursor-default"
+              className="flex items-center gap-3 p-4 rounded-2xl border-2 border-orange-200 bg-orange-50 hover:bg-orange-100 transition-colors"
             >
               <Bell className="w-5 h-5 text-orange-500 flex-shrink-0" />
               <div className="text-left">
                 <p className="text-sm font-bold text-gray-800">Get notified when it launches</p>
                 <p className="text-xs text-gray-500 mt-0.5">Contact us at support@adyapan.com</p>
               </div>
-            </motion.div>
+            </motion.a>
 
             {/* Clock note */}
             <div className="flex items-center justify-center gap-2 mt-6 text-xs text-gray-400">

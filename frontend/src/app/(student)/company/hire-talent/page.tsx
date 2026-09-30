@@ -578,11 +578,12 @@ export default function HireTalentPage() {
                           <p className="text-white font-bold text-lg">{program.graduates}</p>
                           <p className="text-gray-400 text-sm">Available Now</p>
                         </div>
-                        <button
+                        <Link
+                          href="/company/find-employee"
                           className="px-4 py-2 bg-[#ffa800] text-white rounded-lg font-semibold text-sm hover:bg-[#e69500] transition-colors"
                         >
                           View Talent
-                        </button>
+                        </Link>
                       </div>
                     </div>
                   </div>
@@ -622,7 +623,7 @@ export default function HireTalentPage() {
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <div>
                 <Link
-                  href="/company/hire-talent"
+                  href="/company/find-employee"
                   className="inline-flex items-center px-8 py-4 bg-[#ffa800] text-white rounded-lg font-bold text-lg hover:bg-[#e69500] transition-colors"
                 >
                   Start Hiring Now
@@ -632,7 +633,7 @@ export default function HireTalentPage() {
               
               <div>
                 <Link
-                  href="#"
+                  href="/contact"
                   className="inline-flex items-center px-8 py-4 bg-transparent text-white rounded-lg font-bold text-lg border-2 border-gray-600 hover:border-[#ffa800] transition-colors"
                 >
                   Schedule Consultation

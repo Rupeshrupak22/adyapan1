@@ -32,16 +32,17 @@ const PLAN_SLUGS: Record<string, string> = {
 
 function verifyWebhookSignature(body: string, signature: string): boolean {
   const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
+  // A webhook is only ever called by Razorpay, so a missing/placeholder secret
+  // must ALWAYS reject (never fail-open) — otherwise staging/preview deployments
+  // would accept forged payment events.
   if (!secret || secret.includes('your_webhook')) {
-    if (process.env.NODE_ENV === 'production') {
-      console.error('[Webhook] RAZORPAY_WEBHOOK_SECRET is not configured - rejecting webhook');
-      return false;
-    }
-    console.warn('[Webhook] RAZORPAY_WEBHOOK_SECRET not set - skipping check in local dev only');
-    return true;
+    console.error('[Webhook] RAZORPAY_WEBHOOK_SECRET is not configured - rejecting webhook');
+    return false;
   }
   const expected = crypto.createHmac('sha256', secret).update(body).digest('hex');
-  return expected === signature;
+  const a = Buffer.from(expected);
+  const b = Buffer.from(String(signature || ''));
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
 export async function POST(req: NextRequest) {

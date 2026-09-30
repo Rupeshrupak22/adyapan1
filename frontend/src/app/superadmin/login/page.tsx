@@ -5,8 +5,6 @@ import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Eye, EyeOff, ShieldCheck, AlertCircle } from 'lucide-react';
 
-// Cache buster - force reload
-const CACHE_BUSTER = Date.now();
 const STRICT_EMAIL_REGEX = /^[A-Za-z0-9]+@[A-Za-z0-9]+(?:\.[A-Za-z0-9]+)+$/;
 const ACCESS_KEY_REGEX = /^[a-f0-9]{64}$/i;
 
@@ -20,9 +18,19 @@ export default function SuperAdminLogin() {
   const [loading, setLoading]   = useState(false);
   const [error, setError]       = useState('');
 
+  // If already logged in as admin/superadmin, skip the login page.
   useEffect(() => {
-    // page loaded
-  }, []);
+    let active = true;
+    fetch('/api/auth/me', { credentials: 'include' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!active) return;
+        const role = data?.user?.role;
+        if (role === 'SUPERADMIN' || role === 'ADMIN') router.replace('/admin/dashboard');
+      })
+      .catch(() => {});
+    return () => { active = false; };
+  }, [router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -107,7 +115,7 @@ export default function SuperAdminLogin() {
                 required placeholder="||||||||"
                 className="w-full px-4 py-3 pr-11 rounded-xl border-2 border-gray-200 focus:border-purple-500 focus:outline-none text-sm transition-colors"
               />
-              <button type="button" onClick={() => setShowPw(v => !v)}
+              <button type="button" aria-label={showPw ? 'Hide password' : 'Show password'} onClick={() => setShowPw(v => !v)}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
                 {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
@@ -122,7 +130,7 @@ export default function SuperAdminLogin() {
                 required placeholder="Enter admin access key"
                 className="w-full px-4 py-3 pr-11 rounded-xl border-2 border-gray-200 focus:border-purple-500 focus:outline-none text-sm transition-colors"
               />
-              <button type="button" onClick={() => setShowKey(v => !v)}
+              <button type="button" aria-label={showKey ? 'Hide access key' : 'Show access key'} onClick={() => setShowKey(v => !v)}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
                 {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>

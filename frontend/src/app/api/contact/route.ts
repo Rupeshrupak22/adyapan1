@@ -10,6 +10,9 @@ import {
   isSpamSubmission,
   isIndianMobile,
   indianMobileMessage,
+  isValidName,
+  nameFormatMessage,
+  normalizeName,
   normalizeEmail,
   normalizeIndianMobile,
   rateLimitResponse,
@@ -20,7 +23,7 @@ import {
 import ContactMessage from '@/models/ContactMessage';
 
 const ContactSchema = z.object({
-  name: z.string().min(2).max(100).transform((v) => cleanText(v, 100)),
+  name: z.string().refine(isValidName, nameFormatMessage()).transform(normalizeName),
   email: z.string().refine(isStrictEmail, strictEmailMessage()).transform(normalizeEmail),
   phone: z.string().refine(isIndianMobile, indianMobileMessage()).transform((v) => normalizeIndianMobile(v)),
   subject: z.string().min(1).max(150).transform((v) => cleanText(v, 150)),

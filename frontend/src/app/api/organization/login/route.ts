@@ -154,7 +154,7 @@ export async function POST(request: NextRequest) {
     }, { status: 200 });
 
     /* Use same authToken cookie so existing middleware/me route works */
-    res.cookies.set('authToken', token, authCookieOptions(7 * 24 * 60 * 60));
+    res.cookies.set('authToken', token, authCookieOptions(7 * 24 * 60 * 60, 'strict'));
 
     return res;
 

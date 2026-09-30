@@ -198,11 +198,13 @@ const verifyPayment = async (req, res) => {
     const planData = PLANS[plan];
 
     // SECURITY: Verify signature server-side (NEVER trust frontend)
+    // Test mode is decided by SERVER config (no real keys), never by a
+    // client-supplied order-id prefix — otherwise anyone could name their
+    // order "order_TEST_..." to skip verification.
     let signatureValid = false;
 
-    if (razorpay_order_id.startsWith('order_TEST_')) {
-      // Test mode - skip signature verification
-      console.log(`[Payment] TEST MODE - Skipping signature verification for ${razorpay_order_id}`);
+    if (!hasRealKeys()) {
+      console.log(`[Payment] TEST MODE (no real keys) - Skipping signature verification for ${razorpay_order_id}`);
       signatureValid = true;
     } else {
       // Live mode - verify HMAC SHA256 signature

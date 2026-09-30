@@ -38,8 +38,10 @@ import {
 } from 'lucide-react';
 import EmailField from '@/components/forms/EmailField';
 import PhoneField from '@/components/forms/PhoneField';
+import NameField from '@/components/forms/NameField';
 import { isIndianMobile, INDIAN_MOBILE_MESSAGE } from '@/lib/phone';
 import { isValidEmail, EMAIL_FORMAT_MESSAGE } from '@/lib/email-format';
+import { isValidName, NAME_FORMAT_MESSAGE } from '@/lib/name-format';
 
 /* â"€â"€ Counselor contact details â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */
 const COUNSELOR_PHONE = '8179124566';
@@ -385,6 +387,10 @@ export default function OfflineServicesPage() {
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
+    if (!isValidName(form.name)) {
+      setToast({ type: 'error', message: NAME_FORMAT_MESSAGE });
+      return;
+    }
     if (!isValidEmail(form.email)) {
       setToast({ type: 'error', message: EMAIL_FORMAT_MESSAGE });
       return;
@@ -739,23 +745,26 @@ export default function OfflineServicesPage() {
 
           <form onSubmit={handleSubmit} className="rounded-[2rem] border border-orange-100 bg-white p-5 shadow-[0_24px_80px_rgba(249,115,22,0.15)] sm:p-8">
             <div className="grid gap-4 sm:grid-cols-2">
-              {[
-                { name: 'name', label: 'Name', type: 'text', required: true },
-                { name: 'college', label: 'College', type: 'text', required: false },
-              ].map((field) => (
-                <label key={field.name}>
-                  <span className="mb-2 block text-sm font-bold text-gray-700">{field.label}</span>
-                  <input
-                    name={field.name}
-                    type={field.type}
-                    required={field.required}
-                    value={form[field.name as keyof typeof form]}
-                    onChange={(event) => setForm((prev) => ({ ...prev, [field.name]: event.target.value }))}
-                    suppressHydrationWarning
-                    className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm font-semibold text-[#111827] outline-none transition focus:border-orange-400 focus:bg-white focus:ring-4 focus:ring-orange-100"
-                  />
-                </label>
-              ))}
+              <NameField
+                label="Name"
+                value={form.name}
+                onChange={(v) => setForm((prev) => ({ ...prev, name: v }))}
+                placeholder="Enter your full name"
+                inputClassName="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm font-semibold text-[#111827] outline-none transition focus:border-orange-400 focus:bg-white focus:ring-4 focus:ring-orange-100"
+                labelClassName="mb-2 block text-sm font-bold text-gray-700"
+              />
+
+              <label>
+                <span className="mb-2 block text-sm font-bold text-gray-700">College</span>
+                <input
+                  name="college"
+                  type="text"
+                  value={form.college}
+                  onChange={(event) => setForm((prev) => ({ ...prev, college: event.target.value }))}
+                  suppressHydrationWarning
+                  className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm font-semibold text-[#111827] outline-none transition focus:border-orange-400 focus:bg-white focus:ring-4 focus:ring-orange-100"
+                />
+              </label>
 
               <PhoneField
                 label="Phone"

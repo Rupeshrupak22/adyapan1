@@ -4,12 +4,15 @@ import api from '@/lib/api';
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { User, Mail, Phone, Building2, Shield, Save, CheckCircle } from 'lucide-react';
+import { isValidName, NAME_FORMAT_MESSAGE, sanitizeNameInput } from '@/lib/name-format';
+import { isIndianMobile, INDIAN_MOBILE_MESSAGE, sanitizeMobileInput } from '@/lib/phone';
 
 export default function SettingsPage() {
   const [user, setUser]       = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving]   = useState(false);
   const [saved, setSaved]     = useState(false);
+  const [error, setError]     = useState('');
   const [form, setForm]       = useState({ name: '', email: '', phone: '', companyName: '' });
 
   useEffect(() => {
@@ -30,12 +33,17 @@ export default function SettingsPage() {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError('');
+    if (!isValidName(form.name)) { setError(NAME_FORMAT_MESSAGE); return; }
+    if (form.phone && !isIndianMobile(form.phone)) { setError(INDIAN_MOBILE_MESSAGE); return; }
     setSaving(true);
     try {
       await api.post('/api/auth/update-profile', { name: form.name, phone: form.phone });
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
-    } catch (err) { console.error(err); }
+    } catch (err: any) {
+      setError(err?.response?.data?.error || 'Could not save changes. Please try again.');
+    }
     finally { setSaving(false); }
   };
 
@@ -98,8 +106,16 @@ export default function SettingsPage() {
                   <input
                     type={type}
                     value={(form as any)[key]}
-                    onChange={e => setForm(p => ({ ...p, [key]: e.target.value }))}
+                    onChange={e => {
+                      const raw = e.target.value;
+                      const val = key === 'name' ? sanitizeNameInput(raw)
+                        : key === 'phone' ? sanitizeMobileInput(raw)
+                        : raw;
+                      setForm(p => ({ ...p, [key]: val }));
+                      setError('');
+                    }}
                     disabled={disabled}
+                    {...(key === 'phone' ? { inputMode: 'numeric' as const, maxLength: 10 } : {})}
                     className={`w-full pl-10 pr-4 py-2.5 rounded-xl border text-sm transition-all
                       ${disabled
                         ? 'border-gray-100 bg-gray-50 text-gray-400 cursor-not-allowed'
@@ -110,6 +126,10 @@ export default function SettingsPage() {
                 {disabled && <p className="text-xs text-gray-400 mt-1">This field cannot be changed</p>}
               </div>
             ))}
+
+            {error && (
+              <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-2.5">{error}</p>
+            )}
 
             <div className="flex items-center gap-3 pt-2">
               <motion.button

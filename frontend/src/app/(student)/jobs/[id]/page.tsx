@@ -10,6 +10,9 @@ import {
   Building2, ExternalLink, Send, Loader2, AlertCircle, X,
   Calendar, GraduationCap, TrendingUp,
 } from 'lucide-react';
+import { isValidName, NAME_FORMAT_MESSAGE, sanitizeNameInput } from '@/lib/name-format';
+import { isValidEmail, EMAIL_FORMAT_MESSAGE } from '@/lib/email-format';
+import { isIndianMobile, INDIAN_MOBILE_MESSAGE, sanitizeMobileInput } from '@/lib/phone';
 
 interface Job {
   _id: string;
@@ -66,8 +69,14 @@ function ApplyModal({ job, user, onClose, onSuccess }: {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.studentName.trim() || !form.studentEmail.trim()) {
-      setError('Name and email are required'); return;
+    if (!isValidName(form.studentName)) {
+      setError(NAME_FORMAT_MESSAGE); return;
+    }
+    if (!isValidEmail(form.studentEmail)) {
+      setError(EMAIL_FORMAT_MESSAGE); return;
+    }
+    if (form.studentPhone.trim() && !isIndianMobile(form.studentPhone)) {
+      setError(INDIAN_MOBILE_MESSAGE); return;
     }
     setError(''); setSubmitting(true);
     try {
@@ -112,7 +121,7 @@ function ApplyModal({ job, user, onClose, onSuccess }: {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1.5">Full Name <span className="text-red-500">*</span></label>
-              <input type="text" value={form.studentName} onChange={e => set('studentName', e.target.value)} className={inputCls} placeholder="Your full name" />
+              <input type="text" value={form.studentName} onChange={e => set('studentName', sanitizeNameInput(e.target.value))} className={inputCls} placeholder="Your full name" autoComplete="name" />
             </div>
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1.5">Email <span className="text-red-500">*</span></label>
@@ -121,7 +130,7 @@ function ApplyModal({ job, user, onClose, onSuccess }: {
           </div>
           <div>
             <label className="block text-xs font-semibold text-gray-600 mb-1.5">Phone</label>
-            <input type="tel" value={form.studentPhone} onChange={e => set('studentPhone', e.target.value)} className={inputCls} placeholder="+91 9876543210" />
+            <input type="tel" inputMode="numeric" maxLength={10} value={form.studentPhone} onChange={e => set('studentPhone', sanitizeMobileInput(e.target.value))} className={inputCls} placeholder="10-digit mobile number" />
           </div>
           <div>
             <label className="block text-xs font-semibold text-gray-600 mb-1.5">CV / Resume URL</label>

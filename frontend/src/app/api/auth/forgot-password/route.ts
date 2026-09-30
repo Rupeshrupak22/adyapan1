@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (!sent) {
-      console.error(`[ForgotPassword] Reset email failed for ${user.email}`);
+      console.error(`[ForgotPassword] Reset email failed for user ${user._id}`);
     }
 
     return NextResponse.json(SUCCESS_RESPONSE, { status: 200 });

@@ -176,7 +176,7 @@ export async function GET(request: NextRequest) {
     const redirectTo = state.redirect ||
       (user.role === 'COMPANY' ? '/organization' : '/dashboard/student');
     const response = NextResponse.redirect(new URL(redirectTo, request.url));
-    response.cookies.set('authToken', token, authCookieOptions(7 * 24 * 60 * 60));
+    response.cookies.set('authToken', token, authCookieOptions(7 * 24 * 60 * 60, 'strict'));
     response.cookies.set(STATE_COOKIE, '', { ...authCookieOptions(0), maxAge: 0 });
     return response;
   } catch (error) {

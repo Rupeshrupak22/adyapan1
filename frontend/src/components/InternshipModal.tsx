@@ -5,8 +5,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, CheckCircle, Loader2 } from 'lucide-react';
 import EmailField from '@/components/forms/EmailField';
 import PhoneField from '@/components/forms/PhoneField';
+import NameField from '@/components/forms/NameField';
 import { isIndianMobile, INDIAN_MOBILE_MESSAGE } from '@/lib/phone';
 import { isValidEmail, EMAIL_FORMAT_MESSAGE } from '@/lib/email-format';
+import { isValidName, NAME_FORMAT_MESSAGE } from '@/lib/name-format';
 
 interface Props {
   isOpen: boolean;
@@ -33,6 +35,10 @@ export default function InternshipModal({ isOpen, onClose }: Props) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isValidName(form.name)) {
+      setErrorMsg(NAME_FORMAT_MESSAGE);
+      return;
+    }
     if (!isValidEmail(form.email)) {
       setErrorMsg(EMAIL_FORMAT_MESSAGE);
       return;
@@ -152,20 +158,14 @@ export default function InternshipModal({ isOpen, onClose }: Props) {
                     )}
 
                     {/* Name */}
-                    <div>
-                      <label className="block text-xs font-semibold text-gray-600 mb-1.5">
-                        Full Name <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        name="name"
-                        required
-                        value={form.name}
-                        onChange={handleChange}
-                        placeholder="Enter your full name"
-                        className={inp}
-                      />
-                    </div>
+                    <NameField
+                      label="Full Name"
+                      value={form.name}
+                      onChange={(v) => setForm(prev => ({ ...prev, name: v }))}
+                      placeholder="Enter your full name"
+                      inputClassName={inp}
+                      labelClassName="block text-xs font-semibold text-gray-600 mb-1.5"
+                    />
 
                     {/* Course Name */}
                     <div>

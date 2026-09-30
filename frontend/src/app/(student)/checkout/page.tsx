@@ -6,6 +6,9 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getPlan } from '@/lib/planData';
+import { isValidName, NAME_FORMAT_MESSAGE, sanitizeNameInput } from '@/lib/name-format';
+import { isValidEmail, EMAIL_FORMAT_MESSAGE } from '@/lib/email-format';
+import { isIndianMobile, INDIAN_MOBILE_MESSAGE, sanitizeMobileInput } from '@/lib/phone';
 
 /* â"€â"€ helpers â"€â"€ */
 const fmt = (n: number) => 'Rs. ' + n.toLocaleString('en-IN', { minimumFractionDigits: 2 });
@@ -96,9 +99,9 @@ function CheckoutPageInner() {
   /* validate step 1 */
   const validate = () => {
     const e: Record<string, string> = {};
-    if (!name.trim()) e.name = 'Full name is required';
-    if (!email.trim() || !/\S+@\S+\.\S+/.test(email)) e.email = 'Valid email is required';
-    if (!phone.trim() || phone.length < 10) e.phone = 'Valid 10-digit phone required';
+    if (!isValidName(name)) e.name = NAME_FORMAT_MESSAGE;
+    if (!isValidEmail(email)) e.email = EMAIL_FORMAT_MESSAGE;
+    if (!isIndianMobile(phone)) e.phone = INDIAN_MOBILE_MESSAGE;
     if (!state) e.state = 'Please select your state';
     if (!agreed) e.agreed = 'Please accept terms & conditions';
     setErrors(e);
@@ -492,7 +495,7 @@ function CheckoutPageInner() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
                         <label className="block text-xs font-semibold text-gray-600 mb-1.5">Full Name <span className="text-red-500">*</span></label>
-                        <input value={name} onChange={e => setName(e.target.value)} placeholder="Rupesh Kumar" className={inp(errors.name)} />
+                        <input value={name} onChange={e => setName(sanitizeNameInput(e.target.value))} placeholder="Rupesh Kumar" className={inp(errors.name)} />
                         {errors.name && <p className="text-xs text-red-500 mt-1">{errors.name}</p>}
                       </div>
                       <div>
@@ -501,7 +504,7 @@ function CheckoutPageInner() {
                           <select className="rounded-xl border border-gray-200 px-2 py-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-orange-400 shrink-0">
                             <option> +91</option>
                           </select>
-                          <input value={phone} onChange={e => setPhone(e.target.value.replace(/\D/,'').slice(0,10))} placeholder="9876543210" className={inp(errors.phone)} />
+                          <input value={phone} onChange={e => setPhone(sanitizeMobileInput(e.target.value))} placeholder="9876543210" className={inp(errors.phone)} inputMode="numeric" maxLength={10} />
                         </div>
                         {errors.phone && <p className="text-xs text-red-500 mt-1">{errors.phone}</p>}
                       </div>

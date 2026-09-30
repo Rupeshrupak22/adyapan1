@@ -7,6 +7,11 @@ import { connectToDatabase } from '@/lib/mongodb';
 import { protectRoute } from '@/lib/auth';
 import JobPost from '@/models/JobPost';
 import JobApplication from '@/models/JobApplication';
+import {
+  isValidName, nameFormatMessage, normalizeName,
+  isStrictEmail, strictEmailMessage, normalizeEmail,
+  isIndianMobile, indianMobileMessage, normalizeIndianMobile,
+} from '@/lib/security';
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = protectRoute(req);
@@ -25,13 +30,22 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
     const body = await req.json();
     const { studentName, studentEmail, studentPhone, cvUrl, portfolioUrl, message } = body;
-    if (!studentName?.trim() || !studentEmail?.trim()) {
-      return NextResponse.json({ error: 'Name and email are required' }, { status: 400 });
+
+    if (!isValidName(studentName)) {
+      return NextResponse.json({ error: nameFormatMessage() }, { status: 400 });
     }
+    if (!isStrictEmail(studentEmail)) {
+      return NextResponse.json({ error: strictEmailMessage() }, { status: 400 });
+    }
+    const phone = normalizeIndianMobile(studentPhone || '');
+    if (phone && !isIndianMobile(phone)) {
+      return NextResponse.json({ error: indianMobileMessage() }, { status: 400 });
+    }
+
     const application = await JobApplication.create({
       jobId: id, companyId: job.companyId, studentId: auth.userId,
-      studentName: studentName.trim(), studentEmail: studentEmail.toLowerCase().trim(),
-      studentPhone: studentPhone || '', cvUrl: cvUrl || '',
+      studentName: normalizeName(studentName), studentEmail: normalizeEmail(studentEmail),
+      studentPhone: phone, cvUrl: cvUrl || '',
       portfolioUrl: portfolioUrl || '', message: message || '',
       status: 'applied', appliedAt: new Date(),
     });

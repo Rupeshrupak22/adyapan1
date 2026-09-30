@@ -5,8 +5,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, Send, Phone, CheckCircle, Loader2, CalendarDays } from 'lucide-react';
 import EmailField from '@/components/forms/EmailField';
 import PhoneField from '@/components/forms/PhoneField';
+import NameField from '@/components/forms/NameField';
 import { isIndianMobile, INDIAN_MOBILE_MESSAGE } from '@/lib/phone';
 import { isValidEmail, EMAIL_FORMAT_MESSAGE } from '@/lib/email-format';
+import { isValidName, NAME_FORMAT_MESSAGE } from '@/lib/name-format';
 
 interface Props {
   isOpen: boolean;
@@ -39,6 +41,11 @@ export default function CertificationEnrollModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isValidName(form.name)) {
+      setErrorMsg(NAME_FORMAT_MESSAGE);
+      setStatus('error');
+      return;
+    }
     if (!isValidEmail(form.email)) {
       setErrorMsg(EMAIL_FORMAT_MESSAGE);
       setStatus('error');
@@ -190,15 +197,14 @@ export default function CertificationEnrollModal({
 
                     {/* Name + Phone */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-xs font-bold text-gray-600 mb-1.5">
-                          Name <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          name="name" value={form.name} onChange={handleChange}
-                          placeholder="Enter your full name" required className={inp}
-                        />
-                      </div>
+                      <NameField
+                        label="Name"
+                        value={form.name}
+                        onChange={(v) => setForm((prev) => ({ ...prev, name: v }))}
+                        placeholder="Enter your full name"
+                        inputClassName={inp}
+                        labelClassName="block text-xs font-bold text-gray-600 mb-1.5"
+                      />
                       <PhoneField
                         label="Phone"
                         name="phone"

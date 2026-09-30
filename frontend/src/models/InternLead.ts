@@ -29,14 +29,14 @@ const InternLeadSchema = new Schema<IInternLead>(
       required: [true, 'Email is required'],
       lowercase: true,
       trim: true,
-      match: [/^\S+@\S+\.\S+$/, 'Please enter a valid email'],
+      match: [/^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/, 'Please enter a valid email'],
       index: true,
     },
     mobile: {
       type: String,
       required: [true, 'Mobile number is required'],
       trim: true,
-      match: [/^\d{10}$/, 'Mobile number must be 10 digits'],
+      match: [/^[6-9]\d{9}$/, 'Enter a valid 10-digit Indian mobile number'],
     },
   },
   {

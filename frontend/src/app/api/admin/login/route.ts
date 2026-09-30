@@ -76,7 +76,7 @@ export async function POST(request: NextRequest) {
 
     /* â"€â"€ 2. Email whitelist check â"€â"€ */
     if (ALLOWED_ADMIN_EMAIL && normalizedEmail !== ALLOWED_ADMIN_EMAIL) {
-      console.warn(`[AdminLogin]  Unauthorized email: ${normalizedEmail} | IP: ${ip}`);
+      console.warn(`[AdminLogin] Unauthorized login attempt | IP: ${ip}`);
       return NextResponse.json({ error: 'You are not authorized to access the admin panel.' }, { status: 403 });
     }
 
@@ -153,7 +153,7 @@ export async function POST(request: NextRequest) {
       user: { id: user._id.toString(), email: user.email, name: user.name, role: user.role },
     });
 
-    res.cookies.set('authToken', token, authCookieOptions(8 * 60 * 60));
+    res.cookies.set('authToken', token, authCookieOptions(8 * 60 * 60, 'strict'));
     return res;
 
   } catch (err: any) {

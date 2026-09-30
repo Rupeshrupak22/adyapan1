@@ -4,8 +4,10 @@ import { useState } from 'react';
 import { Phone, Mail, Send, CheckCircle, Clock, Instagram, Linkedin, ChevronDown } from 'lucide-react';
 import EmailField from '@/components/forms/EmailField';
 import PhoneField from '@/components/forms/PhoneField';
+import NameField from '@/components/forms/NameField';
 import { isIndianMobile, INDIAN_MOBILE_MESSAGE } from '@/lib/phone';
 import { isValidEmail, EMAIL_FORMAT_MESSAGE } from '@/lib/email-format';
+import { isValidName, NAME_FORMAT_MESSAGE } from '@/lib/name-format';
 
 const CONTACT_INFO = [
   { icon: Phone, label: 'Phone', value: '+91 81791 24566', href: 'tel:+918179124566', color: 'from-green-500 to-emerald-600' },
@@ -37,6 +39,11 @@ export default function ContactPageClient() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isValidName(form.name)) {
+      setErrorMsg(NAME_FORMAT_MESSAGE);
+      setStatus('error');
+      return;
+    }
     if (!isValidEmail(form.email)) {
       setErrorMsg(EMAIL_FORMAT_MESSAGE);
       setStatus('error');
@@ -44,6 +51,11 @@ export default function ContactPageClient() {
     }
     if (!isIndianMobile(form.phone)) {
       setErrorMsg(INDIAN_MOBILE_MESSAGE);
+      setStatus('error');
+      return;
+    }
+    if (!form.subject) {
+      setErrorMsg('Please select a subject.');
       setStatus('error');
       return;
     }
@@ -137,18 +149,14 @@ export default function ContactPageClient() {
             ) : (
               <form onSubmit={handleSubmit} className="space-y-5">
                 <div className="grid sm:grid-cols-2 gap-5">
-                  <div>
-                    <label className="block text-xs font-bold text-gray-700 uppercase mb-1.5">Full Name *</label>
-                    <input
-                      type="text"
-                      name="name"
-                      required
-                      value={form.name}
-                      onChange={handleChange}
-                      placeholder="John Doe"
-                      className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-[#ffa800] focus:bg-white transition-colors"
-                    />
-                  </div>
+                  <NameField
+                    label="FULL NAME"
+                    value={form.name}
+                    onChange={(v) => setForm((prev) => ({ ...prev, name: v }))}
+                    placeholder="John Doe"
+                    inputClassName="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-[#ffa800] focus:bg-white transition-colors"
+                    labelClassName="block text-xs font-bold text-gray-700 uppercase mb-1.5"
+                  />
                   <EmailField
                     label="EMAIL ADDRESS"
                     email={form.email}
@@ -170,9 +178,10 @@ export default function ContactPageClient() {
                     labelClassName="block text-xs font-bold text-gray-700 uppercase mb-1.5"
                   />
                   <div>
-                    <label className="block text-xs font-bold text-gray-700 uppercase mb-1.5">Subject</label>
+                    <label className="block text-xs font-bold text-gray-700 uppercase mb-1.5">Subject *</label>
                     <select
                       name="subject"
+                      required
                       value={form.subject}
                       onChange={handleChange}
                       className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-[#ffa800] focus:bg-white transition-colors"

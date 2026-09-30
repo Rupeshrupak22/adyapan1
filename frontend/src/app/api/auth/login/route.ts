@@ -77,7 +77,7 @@ export async function POST(request: NextRequest) {
 
     /* â"€â"€ Admin/SuperAdmin should use dedicated admin login endpoint â"€â"€ */
     if (user.role === 'ADMIN' || user.role === 'SUPERADMIN') {
-      console.warn(`[Login]  Admin user attempting regular login: ${normalizedEmail} | IP: ${ip}`);
+      console.warn(`[Login] Admin user attempting regular login | IP: ${ip}`);
       return NextResponse.json(
         { error: 'Please use the admin login page at /admin/login' },
         { status: 403 }
@@ -183,7 +183,7 @@ export async function POST(request: NextRequest) {
       },
     }, { status: 200 });
 
-    res.cookies.set('authToken', token, authCookieOptions(7 * 24 * 60 * 60));
+    res.cookies.set('authToken', token, authCookieOptions(7 * 24 * 60 * 60, 'strict'));
 
     return res;
 

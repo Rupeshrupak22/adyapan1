@@ -21,6 +21,10 @@ import {
   sanitizeMongoInput,
   strictEmailMessage,
   verifyTurnstileToken,
+  isValidName,
+  nameFormatMessage,
+  isIndianMobile,
+  indianMobileMessage,
 } from '@/lib/security';
 import {
   findExistingAccountByEmail,
@@ -64,14 +68,19 @@ async function resendPendingVerification(user: any, request: NextRequest) {
 }
 
 /* â"€â"€ Validation schemas â"€â"€ */
+const optionalIndianPhone = z
+  .string()
+  .optional()
+  .refine((v) => !v || isIndianMobile(v), indianMobileMessage());
+
 const StudentSchema = z
   .object({
-    firstName:       z.string().min(2, 'First name must be at least 2 characters'),
-    lastName:        z.string().min(2, 'Last name must be at least 2 characters'),
+    firstName:       z.string().refine(isValidName, nameFormatMessage()),
+    lastName:        z.string().refine(isValidName, nameFormatMessage()),
     email:           z.string().refine(isStrictEmail, strictEmailMessage()),
     password:        z.string().min(8, 'Password must be at least 8 characters'),
     confirmPassword: z.string(),
-    phone:           z.string().optional(),
+    phone:           optionalIndianPhone,
     selectedProgram: z.string().optional(),
     selectedAmount:  z.number().positive().optional(),
   })
@@ -82,12 +91,12 @@ const StudentSchema = z
 
 const OrgSchema = z
   .object({
-    fullName:        z.string().min(2, 'Full name must be at least 2 characters'),
-    companyName:     z.string().min(2, 'Company name must be at least 2 characters'),
+    fullName:        z.string().min(2, 'Full name must be at least 2 characters').max(100),
+    companyName:     z.string().min(2, 'Company name must be at least 2 characters').max(150),
     email:           z.string().refine(isStrictEmail, strictEmailMessage()),
     password:        z.string().min(8, 'Password must be at least 8 characters'),
     confirmPassword: z.string(),
-    phone:           z.string().optional(),
+    phone:           optionalIndianPhone,
   })
   .refine(d => d.password === d.confirmPassword, {
     message: "Passwords don't match",

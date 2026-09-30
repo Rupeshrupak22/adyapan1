@@ -14,53 +14,36 @@ import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { connectToDatabase } from '@/lib/mongodb';
 import mongoose from 'mongoose';
+import ProjectRequest from '@/models/ProjectRequest';
+import ProjectPayment from '@/models/ProjectPayment';
+import { sanitizeMongoInput } from '@/lib/security';
 
-/* â"€â"€ reuse the same lazy-model helpers â"€â"€ */
-function getModel(name: string, schema: mongoose.Schema) {
-  return mongoose.models[name] || mongoose.model(name, schema);
+/**
+ * Test mode is decided ONLY by a server-side env flag, never by a
+ * client-supplied order-id prefix. This prevents a caller from skipping
+ * signature verification by naming their order "order_..._TEST_".
+ */
+function isServerTestMode(): boolean {
+  const keyId = process.env.RAZORPAY_KEY_ID || '';
+  return keyId.startsWith('rzp_test_');
 }
-
-const projectRequestSchema = new mongoose.Schema(
-  {
-    projectTitle:   String, category: String, description: String,
-    features:       [String], techPreference: String, deadline: Date,
-    budget:         Number, contactName: String, contactEmail: String,
-    contactPhone:   String, imageUrls: [String], pdfUrls: [String],
-    referenceFiles: mongoose.Schema.Types.Mixed, additionalNotes: String,
-    userId:         mongoose.Schema.Types.ObjectId,
-    paymentId:      String, orderId: String,
-    paymentStatus:  { type: String, enum: ['pending','success','failed'], default: 'pending' },
-    paidAmount:     Number, projectStatus: String, emailSent: Boolean,
-  },
-  { timestamps: true }
-);
-
-const projectPaymentSchema = new mongoose.Schema(
-  {
-    projectRequestId:  mongoose.Schema.Types.ObjectId,
-    contactName: String, contactEmail: String, contactPhone: String,
-    razorpayOrderId:   String, razorpayPaymentId: String, razorpaySignature: String,
-    amount: Number, currency: String,
-    status:            { type: String, enum: ['pending','success','failed'], default: 'pending' },
-    signatureVerified: Boolean, isTestMode: Boolean,
-    paidAt: Date, failureReason: String,
-  },
-  { timestamps: true }
-);
 
 function verifySignature(orderId: string, paymentId: string, signature: string): boolean {
   const secret = process.env.RAZORPAY_KEY_SECRET;
   if (!secret) throw new Error('RAZORPAY_KEY_SECRET not set');
   const body     = `${orderId}|${paymentId}`;
   const expected = crypto.createHmac('sha256', secret).update(body).digest('hex');
-  return expected === signature;
+  // constant-time comparison to avoid timing leaks
+  const a = Buffer.from(expected);
+  const b = Buffer.from(String(signature || ''));
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
 export async function POST(req: NextRequest) {
   try {
     await connectToDatabase();
 
-    const body = await req.json();
+    const body = sanitizeMongoInput(await req.json()) as Record<string, string>;
     const {
       razorpay_order_id,
       razorpay_payment_id,
@@ -75,9 +58,6 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
-
-    const ProjectRequest = getModel('ProjectRequest', projectRequestSchema);
-    const ProjectPayment = getModel('ProjectPayment', projectPaymentSchema);
 
     /* â"€â"€ 2. Idempotency: already processed? â"€â"€ */
     const existingPayment = await ProjectPayment.findOne({
@@ -94,12 +74,12 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    /* â"€â"€ 3. Verify signature â"€â"€ */
+    /* â"€â"€ 3. Verify signature (server-side decides test mode, not the client) â"€â"€ */
     let signatureValid = false;
-    const isTestOrder  = razorpay_order_id.startsWith('order_PROJECT_TEST_');
-
-    if (isTestOrder) {
-      console.log('[ProjectPayment] TEST MODE - skipping signature verification');
+    if (isServerTestMode() && !process.env.RAZORPAY_KEY_SECRET) {
+      // Only skip when this deployment is explicitly a Razorpay TEST deployment
+      // AND no secret is configured to verify against.
+      console.warn('[ProjectPayment] TEST deployment without secret - skipping signature verification');
       signatureValid = true;
     } else {
       try {
@@ -109,7 +89,7 @@ export async function POST(req: NextRequest) {
           razorpay_signature
         );
       } catch (err: any) {
-        console.error('[ProjectPayment] Signature error:', err.message);
+        console.error('[ProjectPayment] Signature error:', err?.message);
         return NextResponse.json(
           { success: false, error: 'Payment verification failed' },
           { status: 500 }
