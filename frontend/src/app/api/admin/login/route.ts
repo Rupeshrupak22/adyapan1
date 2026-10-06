@@ -80,7 +80,15 @@ export async function POST(request: NextRequest) {
 
     /* ── 1. Access key check — pick hash based on email ── */
     const isSuperAdminEmail = normalizedEmail === (process.env.SUPERADMIN_EMAIL || '').toLowerCase().trim();
-    const expectedHash = isSuperAdminEmail && SA_ACCESS_KEY_HASH ? SA_ACCESS_KEY_HASH : ADMIN_ACCESS_KEY_HASH;
+    const isMeetEmail = normalizedEmail === (process.env.MEET_EMAIL || '').toLowerCase().trim();
+    const meetKeyHash = process.env.MEET_ACCESS_KEY
+      ? crypto.createHash('sha256').update(process.env.MEET_ACCESS_KEY).digest('hex')
+      : '';
+    const expectedHash = isSuperAdminEmail && SA_ACCESS_KEY_HASH
+      ? SA_ACCESS_KEY_HASH
+      : isMeetEmail && meetKeyHash
+      ? meetKeyHash
+      : ADMIN_ACCESS_KEY_HASH;
     if (!verifyAccessKey(accessKey, expectedHash)) {
       console.warn(`[AdminLogin]  Invalid access key from IP: ${ip}`);
       return NextResponse.json({ error: 'Invalid access key.' }, { status: 403 });
