@@ -63,5 +63,25 @@ export async function connectToDatabase(): Promise<typeof mongoose> {
 
   cached.conn = await cached.promise;
   globalForMongoose.mongoose = cached;
+
+  // ── One-time migration: drop legacy unique indexes on certificates ──
+  // These cause false 409s when adding multiple certs for the same student.
+  try {
+    const db = mongoose.connection.db;
+    if (db) {
+      const col = db.collection('certificates');
+      const indexes = await col.indexes();
+      const toDrop = ['certificateId_1', 'userId_1_courseSlug_1'];
+      for (const name of toDrop) {
+        if (indexes.some((i: any) => i.name === name && i.unique)) {
+          await col.dropIndex(name);
+          console.log(`[MongoDB] Dropped unique index: ${name}`);
+        }
+      }
+    }
+  } catch {
+    // Migration is best-effort — never block the app
+  }
+
   return cached.conn;
 }
