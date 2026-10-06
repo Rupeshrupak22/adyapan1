@@ -7,41 +7,39 @@ export async function middleware(request: NextRequest) {
 
   const authToken = request.cookies.get('authToken')?.value;
 
-  // Admin routes that need protection (all /admin/* except login and invite signup)
-  const isAdminRoute =
-    pathname.startsWith('/admin') &&
-    pathname !== '/admin/login' &&
-    !pathname.startsWith('/admin/invite/') &&
-    !pathname.startsWith('/admin/signup');
+  // Public admin routes — no auth needed
+  const isPublicAdminRoute =
+    pathname === '/admin/login' ||
+    pathname.startsWith('/admin/invite/') ||
+    pathname.startsWith('/admin/signup');
 
-  // Unauthenticated access to protected admin route → redirect to login
+  // Protected admin route = starts with /admin but not public
+  const isAdminRoute = pathname.startsWith('/admin') && !isPublicAdminRoute;
+
+  // Unauthenticated → redirect to login
   if (isAdminRoute && !authToken) {
-    const loginUrl = new URL('/admin/login', request.url);
-    return NextResponse.redirect(loginUrl);
+    return NextResponse.redirect(new URL('/admin/login', request.url));
   }
 
-  // Already logged-in admin visiting login page → redirect to dashboard
+  // Already logged-in admin visiting login → redirect to dashboard
   if (pathname === '/admin/login' && authToken) {
     try {
       const secret = process.env.JWT_SECRET;
       if (!secret) return NextResponse.next();
       const { payload } = await jwtVerify(authToken, new TextEncoder().encode(secret));
       if (payload.role === 'ADMIN' || payload.role === 'SUPERADMIN') {
-        return NextResponse.redirect(new URL('/admin', request.url));
+        return NextResponse.redirect(new URL('/admin/dashboard', request.url));
       }
     } catch {
-      // Invalid token — let them reach the login page
       return NextResponse.next();
     }
   }
 
-  // Verify token for protected admin routes
+  // Verify token for protected routes
   if (isAdminRoute && authToken) {
     try {
       const secret = process.env.JWT_SECRET;
-      if (!secret) {
-        return NextResponse.redirect(new URL('/admin/login', request.url));
-      }
+      if (!secret) return NextResponse.redirect(new URL('/admin/login', request.url));
       const { payload } = await jwtVerify(authToken, new TextEncoder().encode(secret));
       if (payload.role !== 'ADMIN' && payload.role !== 'SUPERADMIN') {
         return NextResponse.redirect(new URL('/admin/login', request.url));
