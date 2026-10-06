@@ -11,7 +11,8 @@ export async function middleware(request: NextRequest) {
   const isAdminRoute =
     pathname.startsWith('/admin') &&
     pathname !== '/admin/login' &&
-    !pathname.startsWith('/admin/invite/');
+    !pathname.startsWith('/admin/invite/') &&
+    !pathname.startsWith('/admin/signup');
 
   // Unauthenticated access to protected admin route → redirect to login
   if (isAdminRoute && !authToken) {
