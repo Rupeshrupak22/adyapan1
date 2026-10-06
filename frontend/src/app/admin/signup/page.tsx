@@ -1,17 +1,10 @@
 'use client';
 
-/**
- * /admin/signup?token=...
- *
- * Legacy redirect — invite links previously pointed here.
- * Reads the token query param and redirects to the actual
- * invite acceptance page at /admin/invite/[token].
- */
-
+import { Suspense } from 'react';
 import { useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
-export default function AdminSignupRedirect() {
+function RedirectHandler() {
   const router       = useRouter();
   const searchParams = useSearchParams();
   const token        = searchParams.get('token');
@@ -31,5 +24,17 @@ export default function AdminSignupRedirect() {
         <p className="text-sm text-gray-500 font-medium">Loading invite...</p>
       </div>
     </div>
+  );
+}
+
+export default function AdminSignupRedirect() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-orange-50 to-amber-50">
+        <div className="w-10 h-10 border-4 border-[#ffa800] border-t-transparent rounded-full animate-spin" />
+      </div>
+    }>
+      <RedirectHandler />
+    </Suspense>
   );
 }
