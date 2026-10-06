@@ -31,7 +31,17 @@ import {
 } from '@/lib/security';
 import AuthUser from '@/models/AuthUser';
 
-const ALLOWED_ADMIN_EMAIL = (process.env.ADMIN_LOGIN_EMAIL || process.env.ADMIN_EMAIL || '').toLowerCase().trim();
+// Support multiple allowed emails (comma-separated) or single email
+const ALLOWED_ADMIN_EMAILS = (process.env.ADMIN_LOGIN_EMAIL || process.env.ADMIN_EMAIL || '')
+  .split(',')
+  .map(e => e.toLowerCase().trim())
+  .filter(Boolean);
+const ALLOWED_ADMIN_EMAIL = ALLOWED_ADMIN_EMAILS[0]; // kept for the config check below
+
+// Per-email access key hashes: admin uses ADMIN_ACCESS_KEY_HASH, superadmin gets its own key hash
+const crypto = require('crypto');
+const SA_ACCESS_KEY      = process.env.SUPERADMIN_ACCESS_KEY || '';
+const SA_ACCESS_KEY_HASH = SA_ACCESS_KEY ? crypto.createHash('sha256').update(SA_ACCESS_KEY).digest('hex') : '';
 const ADMIN_ACCESS_KEY_HASH = process.env.ADMIN_ACCESS_KEY_HASH || '';
 
 const LoginSchema = z.object({
@@ -68,14 +78,16 @@ export async function POST(request: NextRequest) {
     const { email, password, accessKey } = parsed.data;
     const normalizedEmail = email.toLowerCase().trim();
 
-    /* â"€â"€ 1. Access key check (first - fast fail) â"€â"€ */
-    if (!verifyAccessKey(accessKey, ADMIN_ACCESS_KEY_HASH)) {
+    /* ── 1. Access key check — pick hash based on email ── */
+    const isSuperAdminEmail = normalizedEmail === (process.env.SUPERADMIN_EMAIL || '').toLowerCase().trim();
+    const expectedHash = isSuperAdminEmail && SA_ACCESS_KEY_HASH ? SA_ACCESS_KEY_HASH : ADMIN_ACCESS_KEY_HASH;
+    if (!verifyAccessKey(accessKey, expectedHash)) {
       console.warn(`[AdminLogin]  Invalid access key from IP: ${ip}`);
       return NextResponse.json({ error: 'Invalid access key.' }, { status: 403 });
     }
 
     /* â"€â"€ 2. Email whitelist check â"€â"€ */
-    if (ALLOWED_ADMIN_EMAIL && normalizedEmail !== ALLOWED_ADMIN_EMAIL) {
+    if (ALLOWED_ADMIN_EMAILS.length > 0 && !ALLOWED_ADMIN_EMAILS.includes(normalizedEmail)) {
       console.warn(`[AdminLogin] Unauthorized login attempt | IP: ${ip}`);
       return NextResponse.json({ error: 'You are not authorized to access the admin panel.' }, { status: 403 });
     }

@@ -101,7 +101,7 @@ export async function GET(request: NextRequest) {
         isRevoked:      !!inv.revokedAt,
         isActive:       !inv.used && !inv.revokedAt && inv.expiresAt > now,
         // Full invite link - token embedded in URL, raw token never exposed
-        inviteLink:     `${baseUrl}/admin/signup?token=${inv.token}`,
+        inviteLink:     `${baseUrl}/admin/invite/${inv.token}`,
         createdAt:      inv.createdAt,
       })),
       total: invites.length,
@@ -188,7 +188,7 @@ export async function POST(request: NextRequest) {
     });
 
     const baseUrl   = process.env.NEXT_PUBLIC_APP_URL || `https://${request.headers.get('host')}`;
-    const inviteLink = `${baseUrl}/admin/signup?token=${token}`;
+    const inviteLink = `${baseUrl}/admin/invite/${token}`;
 
     console.log(`[AdminInvites] Created invite ${invite._id.toString()} | Role: ${role} | By: ${auth.userId}`);
 

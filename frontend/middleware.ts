@@ -7,8 +7,11 @@ export async function middleware(request: NextRequest) {
 
   const authToken = request.cookies.get('authToken')?.value;
 
-  // Admin routes that need protection (all /admin/* except /admin/login)
-  const isAdminRoute = pathname.startsWith('/admin') && pathname !== '/admin/login';
+  // Admin routes that need protection (all /admin/* except login and invite signup)
+  const isAdminRoute =
+    pathname.startsWith('/admin') &&
+    pathname !== '/admin/login' &&
+    !pathname.startsWith('/admin/invite/');
 
   // Unauthenticated access to protected admin route → redirect to login
   if (isAdminRoute && !authToken) {

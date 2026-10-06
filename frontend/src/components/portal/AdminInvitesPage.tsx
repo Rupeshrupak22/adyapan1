@@ -556,3 +556,255 @@ function CreateInviteModal({
     </motion.div>
   );
 }
+
+/* ─── Main Page Component ────────────────────────────────────── */
+export default function AdminInvitesPage() {
+  const [user, setUser]               = useState<any>(null);
+  const [invites, setInvites]         = useState<Invite[]>([]);
+  const [loading, setLoading]         = useState(true);
+  const [refreshing, setRefreshing]   = useState(false);
+  const [filter, setFilter]           = useState<FilterType>('all');
+  const [search, setSearch]           = useState('');
+  const [showCreate, setShowCreate]   = useState(false);
+  const [revokeTarget, setRevokeTarget] = useState<Invite | null>(null);
+  const [revokeLoading, setRevokeLoading] = useState(false);
+  const { toasts, addToast, removeToast } = useToast();
+
+  // Fetch current user to determine if SUPERADMIN
+  useEffect(() => {
+    fetch('/api/admin/me', { credentials: 'include' })
+      .then(r => r.json())
+      .then(data => { if (data?.user) setUser(data.user); })
+      .catch(() => {});
+  }, []);
+
+  const isSuperAdmin = user?.role === 'SUPERADMIN';
+
+  // Fetch invites
+  const fetchInvites = useCallback(async (showSpinner = true) => {
+    if (showSpinner) setLoading(true); else setRefreshing(true);
+    try {
+      const res = await api.get(`/api/admin/invites?filter=${filter}`);
+      setInvites(res.data.invites || []);
+    } catch {
+      addToast('Failed to load invites', 'error');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [filter]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => { fetchInvites(); }, [fetchInvites]);
+
+  // Revoke handler
+  const handleRevoke = async () => {
+    if (!revokeTarget) return;
+    setRevokeLoading(true);
+    try {
+      await api.post(`/api/admin/invites/${revokeTarget.id}/revoke`);
+      addToast('Invite revoked successfully', 'success');
+      setRevokeTarget(null);
+      fetchInvites(false);
+    } catch (err: any) {
+      addToast(err.response?.data?.error || 'Failed to revoke invite', 'error');
+    } finally {
+      setRevokeLoading(false);
+    }
+  };
+
+  // Stats
+  const stats = {
+    all:     invites.length,
+    active:  invites.filter(i => i.isActive).length,
+    used:    invites.filter(i => i.used).length,
+    expired: invites.filter(i => i.isExpired && !i.used && !i.isRevoked).length,
+    revoked: invites.filter(i => i.isRevoked).length,
+  };
+
+  // Filter + search
+  const filtered = invites.filter(inv => {
+    if (!search.trim()) return true;
+    const q = search.toLowerCase();
+    return (
+      inv.email.toLowerCase().includes(q) ||
+      inv.role.toLowerCase().includes(q) ||
+      inv.note?.toLowerCase().includes(q) ||
+      inv.invitedByEmail.toLowerCase().includes(q)
+    );
+  });
+
+  return (
+    <div className="min-h-screen bg-gray-50/50">
+      <ToastContainer toasts={toasts} onRemove={removeToast} />
+
+      {/* Revoke modal */}
+      <AnimatePresence>
+        {revokeTarget && (
+          <RevokeModal
+            invite={revokeTarget}
+            onConfirm={handleRevoke}
+            onCancel={() => setRevokeTarget(null)}
+            loading={revokeLoading}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Create modal */}
+      <AnimatePresence>
+        {showCreate && (
+          <CreateInviteModal
+            onClose={() => setShowCreate(false)}
+            onCreated={() => {
+              setShowCreate(false);
+              addToast('Invite created successfully!', 'success');
+              fetchInvites(false);
+            }}
+          />
+        )}
+      </AnimatePresence>
+
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8 space-y-6">
+
+        {/* Header */}
+        <div className="flex items-center justify-between flex-wrap gap-4">
+          <div>
+            <h1 className="text-2xl font-extrabold text-gray-900 flex items-center gap-2">
+              <UserPlus className="w-6 h-6 text-[#ffa800]" />
+              Admin Invites
+            </h1>
+            <p className="text-sm text-gray-500 mt-0.5">
+              Manage secure invite links for admin and organisation accounts
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => fetchInvites(false)}
+              disabled={refreshing}
+              title="Refresh"
+              className="p-2.5 rounded-xl border-2 border-gray-200 text-gray-500 hover:bg-gray-100 transition-colors disabled:opacity-50"
+            >
+              <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+            </button>
+            {isSuperAdmin && (
+              <button
+                onClick={() => setShowCreate(true)}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-white text-sm shadow-md hover:shadow-lg transition-all active:scale-95"
+                style={{ background: 'linear-gradient(135deg,#ffa800,#ff6b00)' }}
+              >
+                <Plus className="w-4 h-4" />
+                Generate Invite
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* SUPERADMIN notice */}
+        {!isSuperAdmin && (
+          <div className="flex items-start gap-3 p-4 bg-blue-50 border border-blue-200 rounded-2xl text-sm text-blue-800">
+            <Shield className="w-4 h-4 flex-shrink-0 mt-0.5" />
+            <span>You can view invites, but only a <strong>SuperAdmin</strong> can create or revoke them.</span>
+          </div>
+        )}
+
+        {/* Stats row */}
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+          {(
+            [
+              { key: 'all',     label: 'Total',   icon: Key,           color: 'bg-gray-500'   },
+              { key: 'active',  label: 'Active',  icon: CheckCircle,   color: 'bg-green-500'  },
+              { key: 'used',    label: 'Used',    icon: UserPlus,      color: 'bg-purple-500' },
+              { key: 'expired', label: 'Expired', icon: Clock,         color: 'bg-orange-400' },
+              { key: 'revoked', label: 'Revoked', icon: XCircle,       color: 'bg-red-500'    },
+            ] as const
+          ).map(({ key, label, icon, color }) => (
+            <StatCard
+              key={key}
+              label={label}
+              value={stats[key]}
+              icon={icon}
+              color={color}
+              active={filter === key}
+              onClick={() => setFilter(key)}
+            />
+          ))}
+        </div>
+
+        {/* Search + filter bar */}
+        <div className="flex gap-3 flex-wrap">
+          <div className="relative flex-1 min-w-[220px]">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              type="text"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search by email, role, note..."
+              className="w-full pl-10 pr-4 py-2.5 border-2 border-gray-200 rounded-xl text-sm focus:border-[#ffa800] focus:outline-none transition-colors bg-white"
+            />
+          </div>
+          <div className="flex items-center gap-1.5">
+            <Filter className="w-4 h-4 text-gray-400" />
+            {(['all', 'active', 'used', 'expired', 'revoked'] as FilterType[]).map(f => (
+              <button
+                key={f}
+                onClick={() => setFilter(f)}
+                className={`px-3 py-2 rounded-xl text-xs font-bold capitalize transition-colors ${
+                  filter === f
+                    ? 'bg-[#ffa800] text-white'
+                    : 'bg-white border-2 border-gray-200 text-gray-600 hover:border-gray-300'
+                }`}
+              >
+                {f}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Content */}
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-20 gap-3 text-gray-400">
+            <div className="w-10 h-10 border-4 border-[#ffa800] border-t-transparent rounded-full animate-spin" />
+            <p className="text-sm font-medium">Loading invites…</p>
+          </div>
+        ) : filtered.length === 0 ? (
+          <motion.div
+            initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+            className="flex flex-col items-center justify-center py-20 text-gray-400 gap-4"
+          >
+            <div className="w-16 h-16 rounded-2xl bg-gray-100 flex items-center justify-center">
+              <Mail className="w-7 h-7 text-gray-300" />
+            </div>
+            <div className="text-center">
+              <p className="font-bold text-gray-600 mb-1">No invites found</p>
+              <p className="text-sm">
+                {search ? 'Try a different search term.' : filter !== 'all' ? `No ${filter} invites.` : 'No invites have been created yet.'}
+              </p>
+            </div>
+            {isSuperAdmin && filter === 'all' && !search && (
+              <button
+                onClick={() => setShowCreate(true)}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-white text-sm mt-2"
+                style={{ background: 'linear-gradient(135deg,#ffa800,#ff6b00)' }}
+              >
+                <Plus className="w-4 h-4" /> Create First Invite
+              </button>
+            )}
+          </motion.div>
+        ) : (
+          <div className="space-y-3">
+            {filtered.map(invite => (
+              <InviteCard
+                key={invite.id}
+                invite={invite}
+                onRevoke={setRevokeTarget}
+                isSuperAdmin={isSuperAdmin}
+              />
+            ))}
+            <p className="text-xs text-gray-400 text-center pt-2">
+              Showing {filtered.length} of {invites.length} invite{invites.length !== 1 ? 's' : ''}
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
