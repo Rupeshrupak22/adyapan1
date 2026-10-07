@@ -165,7 +165,7 @@ function FileUploadZone({ files, setFiles }: {
       fd.append('file', file);
       fd.append('name', entry.name);
 
-      const res  = await fetch('/api/admin/certificates/upload-file', { method: 'POST', body: fd });
+      const res  = await fetch('/api/admin/certificates/upload-file', { method: 'POST', body: fd, credentials: 'include' });
       const data = await res.json();
 
       if (!res.ok) {
@@ -477,7 +477,7 @@ function AddModal({ open, onClose, onSuccess }: { open: boolean; onClose: () => 
     setSaving(true);
     try {
       const res = await fetch('/api/admin/certificates', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
         body: JSON.stringify({
           studentName: form.studentName, studentEmail: form.studentEmail,
           courseName: form.courseName, courseSlug: form.courseSlug,
@@ -555,7 +555,7 @@ function EditModal({ cert, onClose, onSuccess }: { cert: Certificate | null; onC
     setSaving(true);
     try {
       const res = await fetch(`/api/admin/certificates/${cert!.id}`, {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
         body: JSON.stringify({
           studentName: form.studentName, studentEmail: form.studentEmail,
           courseName: form.courseName, courseSlug: form.courseSlug,
@@ -588,7 +588,7 @@ function DeleteModal({ cert, onClose, onSuccess }: { cert: Certificate | null; o
   const handleDelete = async () => {
     if (!cert) return;
     setDeleting(true);
-    try { await fetch(`/api/admin/certificates/${cert.id}`, { method: 'DELETE' }); onSuccess(); onClose(); }
+    try { await fetch(`/api/admin/certificates/${cert.id}`, { method: 'DELETE', credentials: 'include' }); onSuccess(); onClose(); }
     catch { /* silent */ } finally { setDeleting(false); }
   };
 

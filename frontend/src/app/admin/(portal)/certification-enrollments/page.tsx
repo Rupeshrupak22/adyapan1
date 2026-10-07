@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, useRef } from 'react';
 import { Search, Loader2, Award, ChevronLeft, ChevronRight } from 'lucide-react';
 
 type EnrollmentStatus = 'new' | 'contacted' | 'enrolled' | 'rejected';
@@ -42,6 +42,8 @@ export default function AdminCertificationEnrollmentsPage() {
   const [loading, setLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState('');
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const searchTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [status, setStatus] = useState('all');
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
@@ -52,7 +54,7 @@ export default function AdminCertificationEnrollmentsPage() {
       const params = new URLSearchParams({
         page: String(page),
         limit: String(LIMIT),
-        ...(search.trim() && { search: search.trim() }),
+        ...(debouncedSearch.trim() && { search: debouncedSearch.trim() }),
         ...(status !== 'all' && { status }),
       });
       const res = await fetch(`/api/admin/certification-enrollments?${params}`, {
@@ -68,7 +70,7 @@ export default function AdminCertificationEnrollmentsPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, search, status]);
+  }, [page, debouncedSearch, status]);
 
   useEffect(() => {
     fetchEnrollments();
@@ -76,7 +78,14 @@ export default function AdminCertificationEnrollmentsPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [search, status]);
+  }, [debouncedSearch, status]);
+
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setSearch(val);
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    searchTimerRef.current = setTimeout(() => setDebouncedSearch(val), 500);
+  };
 
   const updateStatus = async (id: string, nextStatus: EnrollmentStatus) => {
     setUpdatingId(id);
@@ -114,7 +123,7 @@ export default function AdminCertificationEnrollmentsPage() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={handleSearchChange}
             placeholder="Search name, phone, email, certification..."
             className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[#ffa800] focus:ring-2 focus:ring-[#ffa800]/10 bg-white"
           />

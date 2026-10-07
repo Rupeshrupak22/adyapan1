@@ -40,13 +40,20 @@ export async function GET(request: NextRequest) {
       if (dateTo) query.paidAt.$lte = new Date(dateTo);
     }
 
-    const [payments, total] = await Promise.all([
+    const revenueQuery = { ...query, status: 'success' };
+    const [payments, total, revenueAgg] = await Promise.all([
       Payment.find(query).sort({ paidAt: -1 }).skip(skip).limit(limit).lean(),
       Payment.countDocuments(query),
+      Payment.aggregate([
+        { $match: revenueQuery },
+        { $group: { _id: null, total: { $sum: '$totalAmount' } } },
+      ]),
     ]);
+    const totalRevenue = revenueAgg[0]?.total || 0;
 
     return NextResponse.json({
       success: true,
+      totalRevenue,
       payments: payments.map(p => ({
         id: p._id.toString(),
         paymentId: p.paymentId,

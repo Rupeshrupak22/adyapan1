@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion } from 'framer-motion';
 import {
   Search, FolderKanban, Phone, Mail, MessageCircle,
@@ -49,11 +49,13 @@ export default function ProjectRequestsPage() {
   const [page, setPage]             = useState(1);
   const [total, setTotal]           = useState(0);
   const LIMIT = 20;
+  const searchTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const [debouncedSearch, setDebouncedSearch] = useState('');
 
   const fetchRequests = useCallback(async () => {
     setLoading(true); setError('');
     try {
-      const params = new URLSearchParams({ search, status: statusFilter, page: String(page), limit: String(LIMIT) });
+      const params = new URLSearchParams({ search: debouncedSearch, status: statusFilter, page: String(page), limit: String(LIMIT) });
       const res  = await fetch(`/api/admin/project-requests?${params}`, { credentials: 'include' });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to load');
@@ -61,9 +63,16 @@ export default function ProjectRequestsPage() {
       setTotal(data.total || 0);
     } catch (e: any) { setError(e.message); }
     finally { setLoading(false); }
-  }, [search, statusFilter, page]);
+  }, [debouncedSearch, statusFilter, page]);
 
   useEffect(() => { fetchRequests(); }, [fetchRequests]);
+
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setSearch(val);
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    searchTimerRef.current = setTimeout(() => { setDebouncedSearch(val); setPage(1); }, 500);
+  };
 
   const pages = Math.ceil(total / LIMIT);
 
@@ -83,7 +92,7 @@ export default function ProjectRequestsPage() {
         <div className="relative flex-1">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input type="text" placeholder="Search by title, name, email..."
-            value={search} onChange={e => { setSearch(e.target.value); setPage(1); }}
+            value={search} onChange={handleSearchChange}
             className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:border-[#ffa800] focus:outline-none focus:shadow-[0_0_0_3px_rgba(255,168,0,0.1)] transition-all" />
         </div>
         <div className="relative">
@@ -181,7 +190,7 @@ export default function ProjectRequestsPage() {
         )}
         {pages > 1 && (
           <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100">
-            <p className="text-xs text-gray-500">Showing {(page - 1) * LIMIT + 1}"{Math.min(page * LIMIT, total)} of {total}</p>
+            <p className="text-xs text-gray-500">Showing {(page - 1) * LIMIT + 1}–{Math.min(page * LIMIT, total)} of {total}</p>
             <div className="flex items-center gap-2">
               <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
                 className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
