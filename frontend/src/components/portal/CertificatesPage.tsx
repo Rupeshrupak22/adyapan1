@@ -649,6 +649,35 @@ export default function CertificatesPage() {
   const [showAdd, setShowAdd]           = useState(false);
   const [editCert, setEditCert]         = useState<Certificate | null>(null);
   const [deleteCert, setDeleteCert]     = useState<Certificate | null>(null);
+  const [sendingId, setSendingId]       = useState<string | null>(null);
+  const [toast, setToast]               = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
+
+  const showToast = (type: 'success' | 'error', msg: string) => {
+    setToast({ type, msg });
+    setTimeout(() => setToast(null), 4000);
+  };
+
+  const handleSendEmail = async (cert: Certificate) => {
+    if (!cert.studentEmail) {
+      showToast('error', 'No email on file. Edit the certificate to add a student email first.');
+      return;
+    }
+    setSendingId(cert.id);
+    try {
+      const res  = await fetch(`/api/admin/certificates/${cert.id}/send-email`, {
+        method: 'POST', credentials: 'include',
+      });
+      const data = await res.json();
+      if (!res.ok) { showToast('error', data.error || 'Failed to send email'); return; }
+      showToast('success', data.message || 'Certificate email sent');
+      // Reflect emailSent locally without a full refetch
+      setCerts(prev => prev.map(c => c.id === cert.id ? { ...c, emailSent: true } : c));
+    } catch {
+      showToast('error', 'Network error — please try again');
+    } finally {
+      setSendingId(null);
+    }
+  };
 
   const fetchCerts = useCallback(async () => {
     setLoading(true);
@@ -789,12 +818,22 @@ export default function CertificatesPage() {
                             <Download className="w-3.5 h-3.5" />
                           </a>
                         ) : null}
-                        {cert.studentEmail && (
-                          <a href={`mailto:${cert.studentEmail}`}
-                            className="p-1.5 rounded-lg text-gray-400 hover:text-blue-500 hover:bg-blue-50 transition-all" title="Email">
-                            <Mail className="w-3.5 h-3.5" />
-                          </a>
-                        )}
+                        <button
+                          onClick={() => handleSendEmail(cert)}
+                          disabled={sendingId === cert.id || !cert.studentEmail}
+                          className={`p-1.5 rounded-lg transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
+                            cert.emailSent
+                              ? 'text-green-500 hover:text-green-600 hover:bg-green-50'
+                              : 'text-gray-400 hover:text-blue-500 hover:bg-blue-50'
+                          }`}
+                          title={cert.studentEmail
+                            ? (cert.emailSent ? 'Email sent — click to resend' : 'Send certificate email')
+                            : 'No email on file'}
+                        >
+                          {sendingId === cert.id
+                            ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            : <Mail className="w-3.5 h-3.5" />}
+                        </button>
                         <button onClick={() => setDeleteCert(cert)}
                           className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-all" title="Delete">
                           <Trash2 className="w-3.5 h-3.5" />
@@ -834,6 +873,23 @@ export default function CertificatesPage() {
       <AddModal    open={showAdd}    onClose={() => setShowAdd(false)}    onSuccess={fetchCerts} />
       <EditModal   cert={editCert}   onClose={() => setEditCert(null)}    onSuccess={fetchCerts} />
       <DeleteModal cert={deleteCert} onClose={() => setDeleteCert(null)}  onSuccess={fetchCerts} />
+
+      {/* Toast */}
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            initial={{ opacity: 0, y: 20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 20, scale: 0.95 }}
+            className={`fixed bottom-6 right-6 z-[60] flex items-center gap-2.5 px-4 py-3 rounded-xl shadow-lg text-sm font-medium max-w-sm ${
+              toast.type === 'success' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'
+            }`}
+          >
+            {toast.type === 'success' ? <CheckCircle className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
+            {toast.msg}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

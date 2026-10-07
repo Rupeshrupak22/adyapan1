@@ -566,3 +566,210 @@ export async function sendWelcomeEmail(p: WelcomeEmailPayload): Promise<boolean>
   const subject = 'Welcome to Adyapan Skills!';
   return sendViaResend(p.email, subject, html, text);
 }
+
+/* ══════════════════════════════════════════════════════════════
+   ADMIN — SEND CERTIFICATE EMAIL (manual, from admin panel)
+   Sends the official certificate email with the uploaded file(s)
+   attached, matching the approved Adyapan template.
+══════════════════════════════════════════════════════════════ */
+export interface AdminCertificateEmailAttachment {
+  filename: string;
+  content: Buffer;   // raw file bytes
+}
+
+export interface AdminCertificateEmailPayload {
+  name: string;
+  email: string;
+  courseName: string;
+  certificateId: string;
+  issuedAt: Date | string;
+  verifyUrl?: string;
+  attachments?: AdminCertificateEmailAttachment[];
+}
+
+export async function sendAdminCertificateEmail(p: AdminCertificateEmailPayload): Promise<boolean> {
+  const config = getResendConfig();
+  if (!config) {
+    console.warn('[Email] Resend not configured. Set RESEND_API_KEY in .env');
+    return false;
+  }
+
+  const verifyUrl = p.verifyUrl || `${APP_URL}/verify-certificate`;
+  const date = new Date(p.issuedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' });
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/></head>
+<body style="margin:0;padding:0;background:#f5f0eb;font-family:'Segoe UI',Helvetica,Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f0eb;padding:40px 16px;">
+<tr><td align="center">
+<table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:24px;overflow:hidden;box-shadow:0 8px 40px rgba(0,0,0,0.10);">
+
+  <!-- HEADER -->
+  <tr>
+    <td style="background:linear-gradient(135deg,#ffa800 0%,#ff6b00 100%);padding:40px 40px 32px;text-align:center;">
+      <div style="width:72px;height:72px;background:rgba(255,255,255,0.2);border-radius:50%;margin:0 auto 20px;line-height:72px;font-size:36px;">&#127881;</div>
+      <h1 style="margin:0 0 8px;color:#ffffff;font-size:26px;font-weight:800;">Congratulations!</h1>
+      <p style="margin:0;color:rgba(255,255,255,0.9);font-size:15px;">Your official certificate from Adyapan Edutech</p>
+    </td>
+  </tr>
+
+  <!-- BODY -->
+  <tr><td style="padding:36px 40px 0;">
+    <p style="margin:0 0 16px;font-size:16px;color:#374151;">Dear <strong>${p.name}</strong>,</p>
+
+    <p style="margin:0 0 16px;font-size:14px;color:#6b7280;line-height:1.8;">
+      Warm greetings from <strong>Adyapan Edutech Pvt. Ltd.</strong>
+    </p>
+
+    <p style="margin:0 0 16px;font-size:15px;font-weight:700;color:#ea580c;">
+      &#127881; Congratulations on successfully completing your program!
+    </p>
+
+    <p style="margin:0 0 20px;font-size:14px;color:#6b7280;line-height:1.8;">
+      We are pleased to share your <strong>official certificate</strong> issued by
+      <strong>Adyapan Edutech Pvt. Ltd.</strong> in recognition of your successful completion,
+      participation, and efforts throughout the program.
+    </p>
+
+    <!-- CERTIFICATE ATTACHED NOTE -->
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#fff7ed;border:1.5px solid #fed7aa;border-radius:16px;margin-bottom:24px;">
+      <tr><td style="padding:18px 22px;">
+        <p style="margin:0 0 8px;font-size:14px;font-weight:700;color:#92400e;">&#128220; Your Certificate is Attached</p>
+        <p style="margin:0;font-size:13px;color:#78350f;line-height:1.7;">
+          Please find your certificate attached to this email. We recommend keeping a digital copy
+          safely for your future academic, professional, internship, and career-related requirements.
+        </p>
+      </td></tr>
+    </table>
+
+    <!-- CERTIFICATE DETAILS -->
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;margin-bottom:24px;">
+      <tr><td style="padding:16px 20px;">
+        ${[
+          ['Certificate ID', p.certificateId],
+          ['Name', p.name],
+          ['Program', p.courseName],
+          ['Issue Date', date],
+        ].map(([k, v]) => `
+        <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:8px;">
+          <tr>
+            <td style="font-size:13px;color:#9ca3af;width:42%;">${k}</td>
+            <td style="font-size:13px;color:#111827;font-weight:600;text-align:right;">${v}</td>
+          </tr>
+        </table>`).join('')}
+      </td></tr>
+    </table>
+
+    <!-- VERIFY -->
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;margin-bottom:28px;">
+      <tr><td style="padding:18px 22px;">
+        <p style="margin:0 0 8px;font-size:14px;font-weight:700;color:#1e40af;">&#128274; Verify Your Certificate</p>
+        <p style="margin:0 0 14px;font-size:13px;color:#374151;line-height:1.7;">
+          Your certificate can be verified online through the official Adyapan Certificate Verification Portal.
+          You can use the certificate details to verify its authenticity at any time.
+        </p>
+        <a href="${verifyUrl}" style="display:inline-block;padding:12px 28px;background:linear-gradient(135deg,#ffa800,#ff6b00);color:#ffffff;font-size:14px;font-weight:700;text-decoration:none;border-radius:12px;">
+          Verify Certificate &rarr;
+        </a>
+      </td></tr>
+    </table>
+
+    <p style="margin:0 0 16px;font-size:14px;color:#6b7280;line-height:1.8;">
+      We truly appreciate your dedication, participation, and commitment throughout the learning journey.
+      We hope the knowledge and experience gained through this program will support you in achieving
+      your academic and professional goals.
+    </p>
+
+    <p style="margin:0 0 24px;font-size:15px;font-weight:700;color:#ea580c;">
+      Once again, congratulations on your achievement! &#127942;
+    </p>
+
+    <p style="margin:0 0 28px;font-size:14px;color:#6b7280;line-height:1.8;">
+      We wish you continued success, growth, and many more accomplishments in the future.
+    </p>
+
+    <p style="margin:0 0 4px;font-size:14px;color:#374151;">Warm Regards,</p>
+    <p style="margin:0 0 2px;font-size:14px;font-weight:700;color:#111827;">Adyapan Edutech Pvt. Ltd.</p>
+    <p style="margin:0 0 2px;font-size:13px;color:#6b7280;">
+      &#127760; <a href="${APP_URL}" style="color:#ea580c;text-decoration:none;">www.adyapan.com</a>
+    </p>
+    <p style="margin:0 0 20px;font-size:13px;color:#6b7280;">
+      &#128231; <a href="mailto:support@adyapan.com" style="color:#ea580c;text-decoration:none;">support@adyapan.com</a>
+    </p>
+    <p style="margin:0 0 36px;font-size:13px;font-weight:700;color:#ffa800;letter-spacing:0.5px;">Learn &middot; Grow &middot; Achieve</p>
+  </td></tr>
+
+  <!-- FOOTER -->
+  <tr>
+    <td style="background:#1a1a2e;padding:24px 40px;text-align:center;">
+      <p style="margin:0 0 4px;font-size:13px;font-weight:700;color:#ffa800;">Adyapan Edutech Pvt. Ltd.</p>
+      <p style="margin:0;font-size:11px;color:#6b7280;">&copy; ${new Date().getFullYear()} Adyapan Skills &middot; All rights reserved</p>
+    </td>
+  </tr>
+
+</table>
+</td></tr>
+</table>
+</body>
+</html>`;
+
+  const text = `Dear ${p.name},
+
+Warm greetings from Adyapan Edutech Pvt. Ltd.
+
+Congratulations on successfully completing your program!
+
+We are pleased to share your official certificate issued by Adyapan Edutech Pvt. Ltd.
+in recognition of your successful completion, participation, and efforts throughout the program.
+
+YOUR CERTIFICATE IS ATTACHED
+Please find your certificate attached to this email. Keep a digital copy safely for your
+future academic, professional, internship, and career-related requirements.
+
+Certificate Details:
+- Certificate ID: ${p.certificateId}
+- Name: ${p.name}
+- Program: ${p.courseName}
+- Issue Date: ${date}
+
+VERIFY YOUR CERTIFICATE
+Verify online: ${verifyUrl}
+
+We truly appreciate your dedication, participation, and commitment throughout the learning journey.
+
+Once again, congratulations on your achievement!
+
+Warm Regards,
+Adyapan Edutech Pvt. Ltd.
+www.adyapan.com
+support@adyapan.com
+
+Learn - Grow - Achieve`;
+
+  const subject = `Your Certificate - ${p.courseName} | Adyapan Edutech`;
+
+  try {
+    const resend = new Resend(config.apiKey);
+    const result = await resend.emails.send({
+      from: config.from,
+      to: p.email,
+      subject,
+      html,
+      text,
+      ...(p.attachments && p.attachments.length > 0
+        ? { attachments: p.attachments.map(a => ({ filename: a.filename, content: a.content })) }
+        : {}),
+    });
+
+    if (result.error) {
+      console.error('[Email] Admin certificate send error:', result.error);
+      return false;
+    }
+    console.log(`[Email] Admin certificate sent to ${p.email} | Cert: ${p.certificateId}`);
+    return true;
+  } catch (err: any) {
+    console.error('[Email] Admin certificate send failed:', err?.message);
+    return false;
+  }
+}
