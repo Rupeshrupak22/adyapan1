@@ -33,10 +33,14 @@ export async function GET(request: NextRequest) {
       best_performance:     'Best Performance',
     };
 
-    const types: string[] = ((cert as any).certificateTypes?.length
+    const rawTypes: string[] = ((cert as any).certificateTypes?.length
       ? (cert as any).certificateTypes
       : [cert.certificateType]
-    ).map((t: string) => PRESET_LABELS[t] ?? t.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()));
+    ).filter((t: unknown): t is string => typeof t === 'string' && t.trim().length > 0);
+
+    const types: string[] = rawTypes.map((t: string) =>
+      PRESET_LABELS[t] ?? t.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())
+    );
 
     return NextResponse.json({
       valid:          true,

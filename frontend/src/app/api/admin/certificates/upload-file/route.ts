@@ -3,13 +3,13 @@ import { protectRouteByRole } from '@/lib/auth';
 import { connectToDatabase } from '@/lib/mongodb';
 import mongoose, { Schema, model, models } from 'mongoose';
 
-// ── Temporary file store (base64, auto-expires after 90 days) ─
+// ── Permanent file store (base64 in MongoDB — no TTL, certs never expire) ─
 const certFileSchema = new Schema({
   name:      { type: String, default: '' },
   mimeType:  { type: String, required: true },
   data:      { type: String, required: true }, // base64 encoded file
   size:      { type: Number },
-  createdAt: { type: Date, default: Date.now, expires: 60 * 60 * 24 * 90 },
+  createdAt: { type: Date, default: Date.now },
 });
 const CertFileStore = models.CertFileStore || model('CertFileStore', certFileSchema);
 
@@ -39,8 +39,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (file.size > 15 * 1024 * 1024) {
-      return NextResponse.json({ error: 'File must be under 15 MB' }, { status: 400 });
+    if (file.size > 20 * 1024 * 1024) {
+      return NextResponse.json({ error: 'File must be under 20 MB' }, { status: 400 });
     }
 
     await connectToDatabase();

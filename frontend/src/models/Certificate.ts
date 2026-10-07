@@ -5,6 +5,7 @@ export type CertificateType = 'course_completion' | 'internship_completion' | 'p
 export interface CertificateDocument {
   _id: mongoose.Types.ObjectId;
   userId: string;
+  studentEmail: string;
   courseSlug: string;
   certificateType: CertificateType;
   certificateTypes: string[];   // multi-select values including custom "other"
@@ -24,6 +25,7 @@ export interface CertificateDocument {
 const certificateSchema = new Schema<CertificateDocument>(
   {
     userId:          { type: String, required: true, index: true },
+    studentEmail:    { type: String, default: '', lowercase: true, trim: true, index: true },
     courseSlug:      { type: String, required: true, index: true },
     certificateType: {
       type: String,

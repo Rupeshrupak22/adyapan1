@@ -63,10 +63,11 @@ export async function GET(request: NextRequest) {
 
     const enriched = await Promise.all(
       certificates.map(async (cert) => {
-        let userEmail = '', userPhone = '';
+        let userEmail = (cert as any).studentEmail || '', userPhone = '';
+        // Fall back to AuthUser lookup for legacy records without a stored email
         if (mongoose.Types.ObjectId.isValid(cert.userId)) {
           const user = await AuthUser.findById(cert.userId).select('email phone').lean();
-          userEmail = (user as any)?.email || '';
+          if (!userEmail) userEmail = (user as any)?.email || '';
           userPhone = (user as any)?.phone || '';
         }
         return {
@@ -150,6 +151,7 @@ export async function POST(request: NextRequest) {
 
     const certData = {
       userId,
+      studentEmail:     studentEmail.toLowerCase().trim(),
       courseSlug:       courseSlug.trim(),
       certificateType:  finalTypes[0],
       certificateTypes: finalTypes,

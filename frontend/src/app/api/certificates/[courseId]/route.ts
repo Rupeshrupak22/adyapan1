@@ -7,6 +7,7 @@ import { connectToDatabase } from '@/lib/mongodb';
 import { protectRoute } from '@/lib/auth';
 import Certificate from '@/models/Certificate';
 import Progress from '@/models/Progress';
+import AuthUser from '@/models/AuthUser';
 
 export async function GET(
   req: NextRequest,
@@ -38,10 +39,17 @@ export async function GET(
       });
     }
 
-    /* -- Fetch certificate -- */
+    /* -- Resolve this user's email so we can also match admin-created certs
+          that were issued before the student registered (synthetic userId). -- */
+    const user = await AuthUser.findById(auth.userId).select('email').lean();
+    const email = (user as any)?.email?.toLowerCase().trim();
+
+    const orConditions: Record<string, unknown>[] = [{ userId: auth.userId }];
+    if (email) orConditions.push({ studentEmail: email });
+
     const cert = await Certificate.findOne({
-      userId: auth.userId,
       courseSlug,
+      $or: orConditions,
     }).lean();
 
     if (!cert) {
@@ -54,17 +62,23 @@ export async function GET(
       });
     }
 
+    const c = cert as any;
+    const uploadedFiles = (c.certificateFiles || []) as Array<{ name: string; url: string }>;
+
     return NextResponse.json({
       success: true,
       isComplete: true,
       progressPercent,
       certificate: {
-        certificateId:  (cert as any).certificateId,
-        studentName:    (cert as any).studentName,
-        courseName:     (cert as any).courseName,
-        issuedAt:       (cert as any).issuedAt,
-        status:         (cert as any).status,
-        downloadUrl:    `/api/certificates/${courseSlug}/download`,
+        certificateId:  c.certificateId,
+        studentName:    c.studentName,
+        courseName:     c.courseName,
+        issuedAt:       c.issuedAt,
+        status:         c.status,
+        // Prefer the admin-uploaded file; otherwise fall back to the generated PDF
+        certificateFiles: uploadedFiles,
+        certificateUrl:   c.certificateUrl || null,
+        downloadUrl:    uploadedFiles[0]?.url || `/api/certificates/${courseSlug}/download`,
       },
     });
   } catch (err: any) {

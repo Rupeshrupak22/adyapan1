@@ -5,7 +5,7 @@ import Certificate from '@/models/Certificate';
 import AuthUser from '@/models/AuthUser';
 import mongoose from 'mongoose';
 
-type RouteContext = { params: { id: string } };
+type RouteContext = { params: Promise<{ id: string }> };
 
 // ── PATCH /api/admin/certificates/:id — edit a certificate ────
 export async function PATCH(request: NextRequest, { params }: RouteContext) {
@@ -15,7 +15,7 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
   try {
     await connectToDatabase();
 
-    const { id } = params;
+    const { id } = await params;
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return NextResponse.json({ error: 'Invalid certificate ID' }, { status: 400 });
     }
@@ -43,16 +43,15 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
       finalTypes.push(otherType.trim());
     }
 
-    // Resolve userId if email changed
-    let userIdUpdate: string | undefined;
-    if (studentEmail?.trim()) {
-      const user = await AuthUser.findOne({ email: studentEmail.toLowerCase().trim() }).select('_id').lean();
-      userIdUpdate = user ? (user as any)._id.toString() : new mongoose.Types.ObjectId().toString();
-    }
-
     const updateFields: Record<string, any> = {};
     if (studentName?.trim())       updateFields.studentName     = studentName.trim();
-    if (studentEmail?.trim())      updateFields.userId          = userIdUpdate;
+    if (studentEmail?.trim()) {
+      // Store the email directly so it persists on the certificate
+      updateFields.studentEmail = studentEmail.toLowerCase().trim();
+      // Re-link to a registered user if one exists; keep existing userId otherwise
+      const user = await AuthUser.findOne({ email: studentEmail.toLowerCase().trim() }).select('_id').lean();
+      if (user) updateFields.userId = (user as any)._id.toString();
+    }
     if (courseName?.trim())        updateFields.courseName      = courseName.trim();
     if (courseSlug?.trim())        updateFields.courseSlug      = courseSlug.trim();
     if (finalTypes.length > 0) {
@@ -96,7 +95,7 @@ export async function DELETE(request: NextRequest, { params }: RouteContext) {
   try {
     await connectToDatabase();
 
-    const { id } = params;
+    const { id } = await params;
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return NextResponse.json({ error: 'Invalid certificate ID' }, { status: 400 });
     }
@@ -119,7 +118,7 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
   try {
     await connectToDatabase();
 
-    const { id } = params;
+    const { id } = await params;
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return NextResponse.json({ error: 'Invalid certificate ID' }, { status: 400 });
     }

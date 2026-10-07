@@ -2,13 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import mongoose, { Schema, model, models } from 'mongoose';
 
-// Same schema as in upload-file route
+// Same schema as in upload-file route — certificate files are permanent (no TTL)
 const certFileSchema = new Schema({
   name:     { type: String, default: '' },
   mimeType: { type: String, required: true },
   data:     { type: String, required: true },
   size:     { type: Number },
-  createdAt: { type: Date, default: Date.now, expires: 60 * 60 * 24 * 90 },
+  createdAt: { type: Date, default: Date.now },
 });
 const CertFileStore = models.CertFileStore || model('CertFileStore', certFileSchema);
 
@@ -19,9 +19,9 @@ const CertFileStore = models.CertFileStore || model('CertFileStore', certFileSch
  */
 export async function GET(
   _request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id } = params;
+  const { id } = await params;
 
   if (!mongoose.Types.ObjectId.isValid(id)) {
     return NextResponse.json({ error: 'Invalid file ID' }, { status: 400 });

@@ -8,6 +8,7 @@ import { connectToDatabase } from '@/lib/mongodb';
 import { protectRoute } from '@/lib/auth';
 import Certificate from '@/models/Certificate';
 import Progress from '@/models/Progress';
+import AuthUser from '@/models/AuthUser';
 // @ts-ignore - pdfkit has no default ESM export
 import PDFDocument from 'pdfkit';
 
@@ -35,10 +36,15 @@ export async function GET(
       );
     }
 
-    /* -- Fetch certificate (user-scoped) -- */
+    /* -- Fetch certificate (match by userId or stored email) -- */
+    const user = await AuthUser.findById(auth.userId).select('email').lean();
+    const email = (user as any)?.email?.toLowerCase().trim();
+    const orConditions: Record<string, unknown>[] = [{ userId: auth.userId }];
+    if (email) orConditions.push({ studentEmail: email });
+
     const cert = await Certificate.findOne({
-      userId: auth.userId,
       courseSlug,
+      $or: orConditions,
     }).lean();
 
     if (!cert) {
@@ -50,7 +56,17 @@ export async function GET(
 
     const c = cert as any;
 
-    /* -- Generate PDF -- */
+    /* -- If admin uploaded a certificate file, redirect to it instead of
+          generating a PDF (the uploaded file is the real certificate). -- */
+    const uploadedUrl: string | undefined = (c.certificateFiles?.[0]?.url) || c.certificateUrl;
+    if (uploadedUrl) {
+      const absolute = uploadedUrl.startsWith('http')
+        ? uploadedUrl
+        : new URL(uploadedUrl, req.nextUrl.origin).toString();
+      return NextResponse.redirect(absolute);
+    }
+
+    /* -- Fallback: generate a PDF certificate on the fly -- */
     const pdfBuffer = await generateCertificatePDF({
       certificateId: c.certificateId,
       studentName:   c.studentName,

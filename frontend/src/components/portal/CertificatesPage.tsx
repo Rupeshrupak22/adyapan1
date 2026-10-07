@@ -141,7 +141,7 @@ function CertTypePicker({ selected, otherType, onChange, onOtherChange }: {
 }
 
 // ── File Upload Zone ──────────────────────────────────────────
-interface UploadedFile extends CertFile { uploading?: boolean; error?: string; localId: string; }
+interface UploadedFile extends CertFile { uploading?: boolean; error?: string; localId: string; isPdf?: boolean; }
 
 function FileUploadZone({ files, setFiles }: {
   files: UploadedFile[];
@@ -157,6 +157,7 @@ function FileUploadZone({ files, setFiles }: {
       name:      file.name.replace(/\.[^/.]+$/, ''),
       url:       '',
       uploading: true,
+      isPdf:     file.type === 'application/pdf',
     };
     setFiles(prev => [...prev, entry]);
 
@@ -237,7 +238,7 @@ function FileUploadZone({ files, setFiles }: {
                     ? <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
                     : f.error
                     ? <AlertCircle className="w-4 h-4 text-red-500" />
-                    : f.url?.includes('.pdf') || f.name?.toLowerCase().includes('pdf')
+                    : f.isPdf
                       ? <FileText className="w-4 h-4 text-[#ffa800]" />
                       : <ImageIcon className="w-4 h-4 text-[#ffa800]" />}
                 </div>
@@ -248,8 +249,9 @@ function FileUploadZone({ files, setFiles }: {
                     ? <p className="text-xs text-gray-500 truncate">Uploading…</p>
                     : f.error
                     ? <p className="text-xs text-red-600 truncate">{f.error}</p>
-                    : <p className="text-xs text-gray-500 truncate font-mono">
-                        {f.url.split('/').pop()?.slice(0, 40) || `File ${idx + 1}`}
+                    : <p className="text-xs text-gray-600 truncate flex items-center gap-1.5">
+                        <span className="font-medium">{f.name || `File ${idx + 1}`}</span>
+                        <span className="text-[10px] text-gray-400 uppercase">{f.isPdf ? 'PDF' : 'Image'}</span>
                       </p>
                   }
                 </div>
@@ -539,9 +541,12 @@ function EditModal({ cert, onClose, onSuccess }: { cert: Certificate | null; onC
       otherType: customTypes[0] || '',
       issuedAt: toDateInput(cert.issuedAt), status: cert.status,
     });
-    // Pre-populate existing files
+    // Pre-populate existing files (infer pdf from name/url hint; cosmetic only)
     setFiles((cert.certificateFiles || []).map((f, i) => ({
-      localId: `existing-${i}-${f.url}`, name: f.name, url: f.url,
+      localId: `existing-${i}-${f.url}`,
+      name: f.name,
+      url: f.url,
+      isPdf: /\.pdf$/i.test(f.name || '') || /pdf/i.test(f.url),
     })));
     setError('');
   }, [cert]);
